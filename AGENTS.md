@@ -77,6 +77,19 @@ npm run icons            # regenerate assets/images/* (pure Node PNG renderer)
   before Bomdod belong to the prayer day's night (`momentOnPrayerDay`). Timed tasks get
   their own notification (`task:<id>`, channel `ishlar`, [Bajarildi ✓] handled by the
   background task); prayer start notifications list that block's tasks ("Keyin: …").
+- **Bomdod alarm — the only custom native code** (`modules/bomdod-alarm`, local Expo
+  module, autolinked from `./modules`, Kotlin, added in app version 1.1.0). JS computes
+  the next 14 days of alarm times (`alarm-plan.ts`, adhan stays in JS) and hands them to
+  native (`setSchedule`); native keeps them in SharedPreferences and chains itself:
+  `setAlarmClock` → `AlarmReceiver` → foreground `AlarmService` (looping alarm ringtone
+  on the ALARM stream with volume ramp, vibration, full-screen-intent notification) →
+  `AlarmActivity` over the lock screen ([Turdim] / [N daqiqadan keyin] / optional math
+  challenge). After "Turdim" a wake-up check fires `alarmCheckDelay` min later (user
+  asked for 15 — time to do wudu); no answer → rings again. Marking Bomdod as prayed calls
+  `confirmAwake()` during sync. `BootReceiver` restores the next alarm. A wake log feeds
+  Tahlil ("Uygʻonish"). JS loads the module with `requireOptionalNativeModule` — absent
+  module ⇒ all no-ops. **Any change under `modules/` needs a version bump + new APK.**
+  Kotlin is compiled only on EAS (no local Android SDK) — review it carefully.
 - Data changes call `emitChange()`; screens read through `useDataVersion()`.
   React Compiler is deliberately OFF (in MoliyamApp it memoized DB reads into stale lists).
 

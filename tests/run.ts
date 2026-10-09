@@ -12,6 +12,7 @@ require('./status.test');
 require('./schedule.test');
 require('./habits.test');
 require('./db.test');
+require('./alarm.test');
 
 const { runAll } = require('./harness') as typeof import('./harness');
 runAll();

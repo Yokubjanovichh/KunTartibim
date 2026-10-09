@@ -16,6 +16,7 @@ import { applyUpdate, currentVersionInfo, isUpdatesSupported } from '../../lib/u
 import { type CompareRow, compareWithAladhan } from '../../lib/verify';
 import { space } from '../../theme/tokens';
 import { Divider, Group, ListRow, Row, ScreenScroll, SectionTitle, Stepper, Toggle, Txt } from '../../ui';
+import { AlarmSection } from '../../ui/AlarmSettings';
 
 const signed = (v: number) => (v === 0 ? '0' : `${v > 0 ? '+' : '−'}${Math.abs(v)} daq`);
 
@@ -79,6 +80,9 @@ export default function SettingsScreen() {
           onPress={() => router.push('/setup')}
         />
       </Group>
+
+      {/* ── Bomdod budilnigi ── */}
+      <AlarmSection settings={settings} now={now} />
 
       {/* ── Namoz vaqtlari ── */}
       <SectionTitle>Namoz vaqtlari</SectionTitle>

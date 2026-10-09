@@ -5,10 +5,12 @@ import { AppState, StyleSheet, View } from 'react-native';
 import { useDataVersion } from '../hooks/useData';
 import { useSetupState } from '../hooks/useSetup';
 import { lastTestAck } from '../lib/actions';
+import { alarmSupported, testAlarm } from '../lib/alarm';
 import { requestPermission, sendTest, syncSchedule } from '../lib/notifications';
 import { hhmm } from '../lib/time';
 import { saveSettings } from '../lib/settings';
 import {
+  openAppDetails,
   openExactAlarmSettings,
   openHuaweiAppLaunch,
   openNotificationSettings,
@@ -27,6 +29,7 @@ export default function SetupScreen() {
   const version = useDataVersion();
   const [testMsg, setTestMsg] = useState<string | null>(null);
   const [ack, setAck] = useState(() => lastTestAck());
+  const [alarmMsg, setAlarmMsg] = useState<string | null>(null);
 
   // Sinov tugmasi fon vazifasida (boshqa JS muhitida) yoziladi — bu ekran uni
   // faqat ilova oldinga chiqqanda yoki maʼlumot oʻzgarganda qayta oʻqiy oladi
@@ -152,6 +155,37 @@ export default function SetupScreen() {
           </Txt>
         )}
       </Step>
+
+      {alarmSupported && (
+        <Step n={6} title="Bomdod budilnigi qulf ekranida" optional>
+          <Txt variant="caption" tone="muted" style={{ lineHeight: 18 }}>
+            Tugmani bosing va telefonni qulflang. 30 soniyadan keyin ekran oʻzi yonib, budilnik chalishi kerak. Ovoz
+            chalsa-yu, ekran chiqmasa — ilova ruxsatlarida qulf ekrani va qalqib chiquvchi oynalar («Всплывающие окна»,
+            «Экран блокировки») bandlarini yoqing.
+          </Txt>
+          <Spacer size={space.md} />
+          <Row style={{ gap: space.sm }}>
+            <View style={{ flex: 1 }}>
+              <Button
+                title="Budilnikni sinash"
+                kind="accent"
+                onPress={() => {
+                  testAlarm(30);
+                  setAlarmMsg('30 soniyadan keyin chaladi — telefonni hozir qulflang.');
+                }}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Button title="Ilova ruxsatlari" kind="secondary" onPress={openAppDetails} />
+            </View>
+          </Row>
+          {alarmMsg && (
+            <Txt variant="caption" tone="accent" style={{ marginTop: space.sm }}>
+              {alarmMsg}
+            </Txt>
+          )}
+        </Step>
+      )}
 
       <View style={styles.tip}>
         <Txt variant="caption" tone="faint" style={{ lineHeight: 18 }}>

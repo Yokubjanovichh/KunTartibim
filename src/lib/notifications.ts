@@ -13,10 +13,12 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
+import { alarmSupported, confirmAwake, setAlarmSchedule } from './alarm';
+import { alarmConfigFrom, buildAlarmPlan } from './alarm-plan';
 import { blockTaskTitles, isTaskOpen, plannedDays, priorityTitlesByDay, taskReminders } from './plan';
 import { prayerKey } from './prayers';
 import { buildPlan, type CategoryId, type NotificationData, type PlannedNotification, readData } from './schedule';
-import { loadSettings } from './settings';
+import { type AppSettings, loadSettings } from './settings';
 import { calendarFor, getRecords, qazoBalances } from './tracker';
 import { addDays } from './time';
 
@@ -182,6 +184,9 @@ async function syncOnce(now: Date): Promise<SyncResult> {
     const settings = loadSettings();
     const perm = await Notifications.getPermissionsAsync();
 
+    // Bomdod budilnigi namoz eslatmalaridan mustaqil: eslatmalar oʻchiq boʻlsa ham uygʻotadi
+    syncAlarm(settings, now);
+
     if (!perm.granted || !settings.enabled) {
       await Notifications.cancelAllScheduledNotificationsAsync();
       return { ok: false, reason: !perm.granted ? 'permission' : 'disabled', planned: 0, changed: 0 };
@@ -249,6 +254,25 @@ async function syncOnce(now: Date): Promise<SyncResult> {
     return { ok: true, planned: plan.length, changed };
   } catch (e) {
     return { ok: false, reason: 'error', planned: 0, changed: 0, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/* ── Bomdod budilnigi ─────────────────────────────────────────────────────── */
+
+/** Keyingi 14 kun — ilova 2 hafta ochilmasa ham budilnik chalaveradi */
+const ALARM_DAYS = 14;
+
+function syncAlarm(settings: AppSettings, now: Date): void {
+  if (!alarmSupported) return;
+  try {
+    const cal = calendarFor(settings);
+    const today = cal.prayerDayAt(now);
+    const records = getRecords(addDays(today, -1), addDays(today, ALARM_DAYS + 1));
+    setAlarmSchedule(buildAlarmPlan(cal, now, ALARM_DAYS, settings, records), alarmConfigFrom(settings));
+    // Bomdod oʻqildi deb belgilangan — "Turdingizmi?" tekshiruvi endi kerak emas
+    if (records.has(prayerKey(today, 'bomdod'))) confirmAwake();
+  } catch {
+    // Budilnik xatosi namoz eslatmalarini toʻxtatmasin
   }
 }
 

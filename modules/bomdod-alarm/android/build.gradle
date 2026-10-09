@@ -1,0 +1,20 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'uz.kuntartibim'
+version = '1.0.0'
+
+android {
+  namespace "expo.modules.bomdodalarm"
+  defaultConfig {
+    versionCode 1
+    versionName '1.0.0'
+  }
+}
+
+dependencies {
+  // expo-notifications bilan bir xil versiya — qoʻshimcha yuklab olish va ziddiyat yoʻq
+  implementation 'androidx.core:core:1.17.0'
+}

@@ -17,6 +17,7 @@ import { useMemo, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 
 import { useDataVersion } from '../hooks/useData';
+import { alarmSupported, wakeLog } from '../lib/alarm';
 import { type Habit, habitMeta, isDaily, markKey, planningStreak, sleepHoursUntil, weekProgress } from '../lib/habits';
 import {
   addTask,
@@ -32,7 +33,7 @@ import {
   updateTask,
 } from '../lib/plan';
 import type { PrayerCalendar } from '../lib/prayer-times';
-import { addDays, daysBetween, formatDayLong, hhmm, weekStart } from '../lib/time';
+import { addDays, daysBetween, formatDayLong, hhmm, isoDay, weekdayShort, weekStart } from '../lib/time';
 import { color, hairline, radius, space, type } from '../theme/tokens';
 import { habitLongPress, taskActions, taskMeta } from './DayPlan';
 import { Button, Divider, Group, Progress, Row, SectionTitle, Spacer, Txt } from './index';
@@ -382,6 +383,7 @@ const styles = StyleSheet.create({
   },
   addInput: { ...type.body, flex: 1, color: color.text, paddingHorizontal: space.lg, paddingVertical: space.md + 2 },
   barRow: { paddingHorizontal: space.lg, paddingVertical: space.sm + 2 },
+  wakeRow: { paddingHorizontal: space.lg, paddingVertical: space.md, justifyContent: 'flex-start', gap: space.md },
   doneBox: {
     padding: space.lg,
     borderRadius: radius.lg,
@@ -390,3 +392,60 @@ const styles = StyleSheet.create({
     backgroundColor: color.accentFaint,
   },
 });
+
+/* ── Uygʻonish jurnali (Bomdod budilnigi) ─────────────────────────────────── */
+
+/**
+ * Har tong budilnik qachon chalindi va qachon "Turdim" bosildi — native modul
+ * jurnalidan. Kech yotish → kech turish bogʻliqligini koʻrish uchun.
+ */
+export function WakeStats({ wStart, today }: { wStart: string; today: string }) {
+  if (!alarmSupported) return null;
+  // Native jurnal ilova tashqarisida (budilnik paytida) yoziladi — har chizishda yangidan oʻqiymiz
+  const week = wakeLog()
+    .filter((e) => {
+      const d = isoDay(new Date(e.at));
+      return d >= wStart && d <= addDays(today, 1);
+    })
+    .sort((a, b) => a.at - b.at);
+  if (!week.length) return null;
+
+  const woke = week.filter((e) => e.dismissedAt > 0);
+  const avgSnooze = week.reduce((s, e) => s + e.snoozes, 0) / week.length;
+
+  return (
+    <>
+      <SectionTitle right={<Txt variant="caption" tone="faint" numeric>{woke.length}/{week.length} turildi</Txt>}>
+        Uygʻonish
+      </SectionTitle>
+      <Group>
+        {week.map((e, i) => {
+          const day = isoDay(new Date(e.at));
+          const parts = [
+            e.dismissedAt ? `${hhmm(new Date(e.dismissedAt))} da turdi` : 'javobsiz tugadi',
+            e.snoozes ? `${e.snoozes} marta keyinga surildi` : null,
+            e.rechecked ? 'tekshiruvdan keyin qayta chaldi' : null,
+          ].filter(Boolean);
+          return (
+            <View key={`${e.at}`}>
+              {i > 0 && <Divider inset={space.lg} />}
+              <Row style={styles.wakeRow}>
+                <Txt variant="label" tone="muted" style={{ width: 64 }}>
+                  {weekdayShort(day)} {Number(day.slice(8))}
+                </Txt>
+                <Txt variant="body" tone={e.dismissedAt ? 'default' : 'danger'} style={{ flex: 1 }} numeric>
+                  {parts.join(' · ')}
+                </Txt>
+              </Row>
+            </View>
+          );
+        })}
+      </Group>
+      {avgSnooze >= 1 && (
+        <Txt variant="caption" tone="muted" style={[styles.pad, { marginTop: space.sm }]}>
+          Har tong oʻrtacha {avgSnooze.toFixed(1).replace('.', ',')} marta keyinga surilyapti — telefonni karavotdan uzoqroqqa qoʻyib koʻring.
+        </Txt>
+      )}
+    </>
+  );
+}

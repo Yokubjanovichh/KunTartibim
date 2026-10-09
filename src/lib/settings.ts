@@ -5,12 +5,13 @@
  */
 
 import { getSetting, setSetting } from '../db/client';
+import { type AlarmSettings, DEFAULT_ALARM_SETTINGS } from './alarm-plan';
 import { emitChange } from './events';
 import { type Adjustments, NO_ADJUSTMENTS, TIME_KEYS } from './prayer-times';
 import { DEFAULT_PLAN_SETTINGS, type PlanSettings } from './schedule';
 import { parseHm } from './time';
 
-export interface AppSettings extends PlanSettings {
+export interface AppSettings extends PlanSettings, AlarmSettings {
   adjustments: Adjustments;
   /** Kuzatuv boshlangan vaqt (ISO). Bundan oldingi namozlar qazoga yozilmaydi. */
   trackingStart: string;
@@ -30,6 +31,13 @@ const KEYS = {
   qazoDailyDays: 'qazo_daily_days',
   bedtimeEnabled: 'bedtime_enabled',
   bedtime: 'bedtime',
+  alarmEnabled: 'alarm_enabled',
+  alarmOffset: 'alarm_offset',
+  alarmMaxSnooze: 'alarm_max_snooze',
+  alarmSnoozeMinutes: 'alarm_snooze_minutes',
+  alarmCheck: 'alarm_check',
+  alarmCheckDelay: 'alarm_check_delay',
+  alarmChallenge: 'alarm_challenge',
 } as const;
 
 function readBool(key: string, fallback: boolean): boolean {
@@ -74,6 +82,7 @@ export function ensureTrackingStart(now = new Date()): string {
 
 export function loadSettings(): AppSettings {
   const d = DEFAULT_PLAN_SETTINGS;
+  const a = DEFAULT_ALARM_SETTINGS;
   return {
     adjustments: readAdjustments(),
     trackingStart: ensureTrackingStart(),
@@ -86,6 +95,13 @@ export function loadSettings(): AppSettings {
     qazoDailyDays: readInt(KEYS.qazoDailyDays, d.qazoDailyDays, 1, 10),
     bedtimeEnabled: readBool(KEYS.bedtimeEnabled, d.bedtimeEnabled),
     bedtime: readTime(KEYS.bedtime, d.bedtime),
+    alarmEnabled: readBool(KEYS.alarmEnabled, a.alarmEnabled),
+    alarmOffset: readInt(KEYS.alarmOffset, a.alarmOffset, 0, 60),
+    alarmMaxSnooze: readInt(KEYS.alarmMaxSnooze, a.alarmMaxSnooze, 0, 5),
+    alarmSnoozeMinutes: readInt(KEYS.alarmSnoozeMinutes, a.alarmSnoozeMinutes, 1, 15),
+    alarmCheck: readBool(KEYS.alarmCheck, a.alarmCheck),
+    alarmCheckDelay: readInt(KEYS.alarmCheckDelay, a.alarmCheckDelay, 5, 30),
+    alarmChallenge: readBool(KEYS.alarmChallenge, a.alarmChallenge),
   };
 }
 

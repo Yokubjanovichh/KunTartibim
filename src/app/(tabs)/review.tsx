@@ -10,7 +10,7 @@ import { calendarFor, dayNotes, getDayNote, getRecords, makeupSince, markPrayer,
 import { color, hairline, radius, space, type } from '../../theme/tokens';
 import { Button, Divider, Group, Progress, Row, ScreenScroll, SectionTitle, Spacer, Tap, Txt } from '../../ui';
 import { useDayPlan } from '../../ui/DayPlan';
-import { TodayClose, TomorrowPlan, WeekPlanStats } from '../../ui/EveningPlan';
+import { TodayClose, TomorrowPlan, WakeStats, WeekPlanStats } from '../../ui/EveningPlan';
 import { pressPrayer } from '../../ui/prayerActions';
 
 const SHORT: Record<PrayerId, string> = { bomdod: 'Bo', peshin: 'Pe', asr: 'As', shom: 'Sh', xufton: 'Xu', vitr: 'Vi' };
@@ -157,6 +157,7 @@ export default function ReviewScreen() {
       </View>
 
       <WeekPlanStats wStart={wStart} today={today} habits={plan.habits} marks={plan.marks} bomdod={week.byPrayer.bomdod} />
+      <WakeStats wStart={wStart} today={today} />
 
       <SectionTitle>Hafta xulosasi</SectionTitle>
       <NoteInput key={`week:${wStart}`} noteKey={`week:${wStart}`} placeholder="Bu hafta qanday oʻtdi? Keyingi haftaga bitta niyat." />
