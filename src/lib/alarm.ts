@@ -18,6 +18,8 @@ export interface WakeLogEntry {
   snoozes: number;
   /** "Turdingizmi?"ga javob bermagani uchun qayta chalgan */
   rechecked: boolean;
+  /** "Turdim" bosilgan, lekin qayta chalishga javob boʻlmadi — qayta uxlab qolgan */
+  asleep?: boolean;
 }
 
 export interface AlarmStatus {

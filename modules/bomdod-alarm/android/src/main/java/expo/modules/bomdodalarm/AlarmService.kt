@@ -3,12 +3,12 @@ package expo.modules.bomdodalarm
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.media.AudioAttributes
+import android.media.AudioManager
 import android.media.MediaPlayer
 import android.media.RingtoneManager
 import android.net.Uri
@@ -21,13 +21,12 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import android.provider.Settings
-import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 
 /**
  * Budilnik chalayotgan paytdagi oldingi plan xizmati.
  *   · ovoz — telefonning budilnik ohangi, BUDILNIK oqimida (ovozsiz rejimda ham eshitiladi),
- *     takrorlanadi va 15 soniyada asta balandlashadi
+ *     takrorlanadi va 15 soniyada asta balandlashadi; oqim juda past boʻlsa ~70% ga koʻtariladi
  *   · tebranish — takrorlanuvchi
  *   · bildirishnoma — full-screen intent bilan: ekran oʻchiq/qulf boʻlsa oyna ochiladi,
  *     telefon ishlatilayotgan boʻlsa tepada tugmalar bilan chiqadi
@@ -37,7 +36,6 @@ class AlarmService : Service() {
   companion object {
     private const val CHANNEL = "bomdod_budilnik"
     const val NOTIF_ID = 7201
-    private const val FLAGS = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
 
     @Volatile
     var isRinging = false
@@ -49,34 +47,47 @@ class AlarmService : Service() {
   private var wakeLock: PowerManager.WakeLock? = null
   private val handler = Handler(Looper.getMainLooper())
   private var volume = 0.2f
+  private var savedAlarmVolume = -1
+  private val timeoutTask = Runnable { AlarmControl.timeout(this) }
 
   override fun onBind(intent: Intent?): IBinder? = null
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-    val session = AlarmStore.session(this)
-    if (session == null) {
+    val kind = intent?.getStringExtra(AlarmReceiver.EXTRA_KIND) ?: AlarmReceiver.KIND_MAIN
+    ensureChannel()
+
+    // startForegroundService() bilan ochilgan xizmat startForeground()ni ALBATTA chaqirishi
+    // kerak — undan oldin stopSelf() qilinsa ham Android ilovani yiqitadi. Shuning uchun birinchi.
+    try {
+      ServiceCompat.startForeground(
+        this,
+        NOTIF_ID,
+        AlarmControl.alarmNotification(this, CHANNEL, kind).build(),
+        ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK,
+      )
+    } catch (e: Exception) {
+      // Android oldingi plan xizmatiga ruxsat bermadi — zaxira yoʻl
+      AlarmControl.startFallback(this, kind)
       stopSelf()
       return START_NOT_STICKY
     }
-    val kind = intent?.getStringExtra(AlarmReceiver.EXTRA_KIND) ?: AlarmReceiver.KIND_MAIN
-    val title = if (kind == AlarmReceiver.KIND_RECHECK) "Hali turmadingizmi?" else session.title
 
-    ensureChannel()
-    ServiceCompat.startForeground(
-      this,
-      NOTIF_ID,
-      buildNotification(title, bodyFor(session)),
-      ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK,
-    )
+    if (AlarmStore.session(this) == null) {
+      // Shu orada budilnik bekor qilingan (masalan, Bomdod "oʻqildi" deb belgilandi)
+      stopSelf()
+      return START_NOT_STICKY
+    }
     isRinging = true
 
+    // Avval eski taymerlar (oldingi chalinishdan) tozalanadi — keyin ovoz balandlash taymeri
+    // qoʻyiladi. Teskari tartibda ovoz 20% da qotib qolardi.
+    handler.removeCallbacksAndMessages(null)
     acquireWakeLock()
+    raiseAlarmVolume()
     startSound()
     startVibration()
-    launchActivity()
-
-    handler.removeCallbacksAndMessages(null)
-    handler.postDelayed({ AlarmControl.timeout(this) }, AlarmStore.config(this).ringMinutes * 60_000L)
+    launchActivity(kind)
+    handler.postDelayed(timeoutTask, AlarmStore.config(this).ringMinutes * 60_000L)
     return START_NOT_STICKY
   }
 
@@ -85,59 +96,11 @@ class AlarmService : Service() {
     handler.removeCallbacksAndMessages(null)
     stopSound()
     stopVibration()
+    restoreAlarmVolume()
     wakeLock?.let { if (it.isHeld) it.release() }
     wakeLock = null
     ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
     super.onDestroy()
-  }
-
-  /* ── Bildirishnoma ───────────────────────────────────────────────────────── */
-
-  private fun activityIntent(): Intent =
-    Intent(this, AlarmActivity::class.java).addFlags(
-      Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_USER_ACTION,
-    )
-
-  private fun buildNotification(title: String, body: String): Notification {
-    val full = PendingIntent.getActivity(this, 7401, activityIntent(), FLAGS)
-    val builder = NotificationCompat.Builder(this, CHANNEL)
-      .setSmallIcon(AlarmControl.smallIcon(this))
-      .setContentTitle(title)
-      .setContentText(body)
-      .setPriority(NotificationCompat.PRIORITY_MAX)
-      .setCategory(NotificationCompat.CATEGORY_ALARM)
-      .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-      .setOngoing(true)
-      .setAutoCancel(false)
-      .setContentIntent(full)
-      .setFullScreenIntent(full, true)
-
-    // Misol rejimida bildirishnomadan oʻchirib boʻlmaydi — oynani ochib, misolni yechish kerak
-    if (!AlarmStore.config(this).challenge) {
-      val dismiss = PendingIntent.getBroadcast(
-        this,
-        7402,
-        Intent(this, AlarmReceiver::class.java).setAction(AlarmReceiver.ACTION_DISMISS),
-        FLAGS,
-      )
-      builder.addAction(0, "Turdim", dismiss)
-    }
-    if (AlarmControl.canSnooze(this)) {
-      val snooze = PendingIntent.getBroadcast(
-        this,
-        7403,
-        Intent(this, AlarmReceiver::class.java).setAction(AlarmReceiver.ACTION_SNOOZE),
-        FLAGS,
-      )
-      builder.addAction(0, "${AlarmStore.config(this).snoozeMinutes} daqiqadan keyin", snooze)
-    }
-    return builder.build()
-  }
-
-  private fun bodyFor(s: Session): String {
-    if (s.endAt <= 0) return s.body
-    val left = ((s.endAt - System.currentTimeMillis()) / 60_000L).toInt()
-    return if (left > 0) "Quyosh chiqishiga $left daqiqa qoldi" else s.body
   }
 
   private fun ensureChannel() {
@@ -153,16 +116,45 @@ class AlarmService : Service() {
     nm.createNotificationChannel(ch)
   }
 
-  private fun launchActivity() {
+  private fun launchActivity(kind: String) {
     // Full-screen intent asosiy yoʻl; bu — ekran yoniq boʻlgan holat uchun qoʻshimcha urinish
     try {
-      startActivity(activityIntent())
+      startActivity(AlarmControl.screenIntent(this, kind))
     } catch (e: Exception) {
       // Android fon cheklovi — bildirishnoma baribir chiqadi
     }
   }
 
   /* ── Ovoz ────────────────────────────────────────────────────────────────── */
+
+  private fun audioManager(): AudioManager? = getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+
+  /** Budilnik ovozi juda past qoʻyilgan boʻlsa — chalish paytida kamida ~70% ga koʻtaramiz */
+  private fun raiseAlarmVolume() {
+    val am = audioManager() ?: return
+    try {
+      val max = am.getStreamMaxVolume(AudioManager.STREAM_ALARM)
+      val current = am.getStreamVolume(AudioManager.STREAM_ALARM)
+      val floor = (max * 7 + 9) / 10
+      if (current < floor) {
+        if (savedAlarmVolume < 0) savedAlarmVolume = current
+        am.setStreamVolume(AudioManager.STREAM_ALARM, floor, 0)
+      }
+    } catch (e: Exception) {
+      // Ayrim rejimlarda tizim ruxsat bermaydi — mavjud balandlikda chaladi
+    }
+  }
+
+  /** Foydalanuvchining oʻz sozlamasi qaytariladi */
+  private fun restoreAlarmVolume() {
+    if (savedAlarmVolume < 0) return
+    try {
+      audioManager()?.setStreamVolume(AudioManager.STREAM_ALARM, savedAlarmVolume, 0)
+    } catch (e: Exception) {
+      // ixtiyoriy
+    }
+    savedAlarmVolume = -1
+  }
 
   private fun candidateUris(): List<Uri> {
     val list = mutableListOf<Uri>()
@@ -176,6 +168,7 @@ class AlarmService : Service() {
 
   private fun startSound() {
     stopSound()
+    volume = 0.2f
     val attrs = AudioAttributes.Builder()
       .setUsage(AudioAttributes.USAGE_ALARM)
       .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)

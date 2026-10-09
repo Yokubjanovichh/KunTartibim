@@ -1,6 +1,7 @@
 package expo.modules.bomdodalarm
 
 import android.app.Activity
+import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -54,10 +55,17 @@ class AlarmActivity : Activity() {
     blockBack()
   }
 
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    // Oyna ochiq turganda yangi chalinish (masalan, qayta chalish) — sarlavha yangilanadi
+    setIntent(intent)
+    setContentView(buildUi())
+  }
+
   override fun onResume() {
     super.onResume()
     // Budilnik boshqa joydan (bildirishnoma tugmasi) oʻchirilgan boʻlsa — oyna kerak emas
-    if (!AlarmService.isRinging) finish()
+    if (!AlarmService.isRinging && !AlarmControl.fallbackRinging(this)) finish()
   }
 
   override fun onDestroy() {
@@ -132,11 +140,9 @@ class AlarmActivity : Activity() {
     }
 
     root.addView(text(SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date()), 76f, TEXT))
-    root.addView(text(session?.title ?: "Bomdod vaqti", 24f, ACCENT, bold = true))
-
-    val left = session?.endAt?.let { ((it - System.currentTimeMillis()) / 60_000L).toInt() } ?: 0
-    val body = if (left > 0) "Quyosh chiqishiga $left daqiqa qoldi" else (session?.body ?: "")
-    root.addView(text(body, 16f, MUTED).apply { setPadding(0, dp(8), 0, 0) })
+    val kind = intent?.getStringExtra(AlarmReceiver.EXTRA_KIND)
+    root.addView(text(AlarmControl.titleFor(session, kind), 24f, ACCENT, bold = true))
+    root.addView(text(AlarmControl.bodyFor(session), 16f, MUTED).apply { setPadding(0, dp(8), 0, 0) })
 
     val spacer = View(this)
     root.addView(spacer, LinearLayout.LayoutParams(1, dp(56)))

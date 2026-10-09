@@ -17,7 +17,7 @@ import { useMemo, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 
 import { useDataVersion } from '../hooks/useData';
-import { alarmSupported, wakeLog } from '../lib/alarm';
+import { alarmSupported, wakeLog, type WakeLogEntry } from '../lib/alarm';
 import { type Habit, habitMeta, isDaily, markKey, planningStreak, sleepHoursUntil, weekProgress } from '../lib/habits';
 import {
   addTask,
@@ -410,7 +410,8 @@ export function WakeStats({ wStart, today }: { wStart: string; today: string }) 
     .sort((a, b) => a.at - b.at);
   if (!week.length) return null;
 
-  const woke = week.filter((e) => e.dismissedAt > 0);
+  const awake = (e: WakeLogEntry) => e.dismissedAt > 0 && !e.asleep;
+  const woke = week.filter(awake);
   const avgSnooze = week.reduce((s, e) => s + e.snoozes, 0) / week.length;
 
   return (
@@ -422,9 +423,13 @@ export function WakeStats({ wStart, today }: { wStart: string; today: string }) 
         {week.map((e, i) => {
           const day = isoDay(new Date(e.at));
           const parts = [
-            e.dismissedAt ? `${hhmm(new Date(e.dismissedAt))} da turdi` : 'javobsiz tugadi',
+            !e.dismissedAt
+              ? 'javobsiz tugadi'
+              : e.asleep
+                ? `${hhmm(new Date(e.dismissedAt))} da turdi, lekin qayta uxlab qoldi`
+                : `${hhmm(new Date(e.dismissedAt))} da turdi`,
             e.snoozes ? `${e.snoozes} marta keyinga surildi` : null,
-            e.rechecked ? 'tekshiruvdan keyin qayta chaldi' : null,
+            e.rechecked && !e.asleep ? 'tekshiruvdan keyin qayta chaldi' : null,
           ].filter(Boolean);
           return (
             <View key={`${e.at}`}>
@@ -433,7 +438,7 @@ export function WakeStats({ wStart, today }: { wStart: string; today: string }) 
                 <Txt variant="label" tone="muted" style={{ width: 64 }}>
                   {weekdayShort(day)} {Number(day.slice(8))}
                 </Txt>
-                <Txt variant="body" tone={e.dismissedAt ? 'default' : 'danger'} style={{ flex: 1 }} numeric>
+                <Txt variant="body" tone={awake(e) ? 'default' : 'danger'} style={{ flex: 1 }} numeric>
                   {parts.join(' · ')}
                 </Txt>
               </Row>

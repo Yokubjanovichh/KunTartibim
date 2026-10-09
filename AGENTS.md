@@ -85,11 +85,19 @@ npm run icons            # regenerate assets/images/* (pure Node PNG renderer)
   on the ALARM stream with volume ramp, vibration, full-screen-intent notification) →
   `AlarmActivity` over the lock screen ([Turdim] / [N daqiqadan keyin] / optional math
   challenge). After "Turdim" a wake-up check fires `alarmCheckDelay` min later (user
-  asked for 15 — time to do wudu); no answer → rings again. Marking Bomdod as prayed calls
-  `confirmAwake()` during sync. `BootReceiver` restores the next alarm. A wake log feeds
-  Tahlil ("Uygʻonish"). JS loads the module with `requireOptionalNativeModule` — absent
-  module ⇒ all no-ops. **Any change under `modules/` needs a version bump + new APK.**
-  Kotlin is compiled only on EAS (no local Android SDK) — review it carefully.
+  asked for 15 — time to do wudu); no answer → rings again, and an unanswered ring
+  auto-snoozes within the shared `maxSnoozes` budget (the goal is waking, so the recheck
+  phase snoozes too). Nothing rings after sunrise (`endAt`) — `AlarmControl.expire`.
+  Marking Bomdod as prayed calls `confirmAwake()` during sync (never clears a ringing or
+  *test* session — JS syncs run on every data change and would kill the 30-s test).
+  If Android refuses the foreground service, `startFallback` posts an insistent
+  alarm-sound notification with the same full-screen intent. While ringing, the ALARM
+  stream is raised to ≥70% and restored afterwards. `BootReceiver` restores the next alarm.
+  A wake log feeds Tahlil ("Uygʻonish": turdi / qayta uxlab qoldi (`asleep`) / javobsiz).
+  JS loads the module with `requireOptionalNativeModule` — absent module ⇒ all no-ops.
+  **Any change under `modules/` needs a new APK** (bump `expo.version` once a build with
+  that version has been installed). Kotlin is compiled only on EAS (no local Android
+  SDK) — review it carefully.
 - Data changes call `emitChange()`; screens read through `useDataVersion()`.
   React Compiler is deliberately OFF (in MoliyamApp it memoized DB reads into stale lists).
 
@@ -117,6 +125,15 @@ npm run icons            # regenerate assets/images/* (pure Node PNG renderer)
   user's real email must not appear in this public history. Never commit secrets.
   (The first APK build and OTA 5e04aae9 were made before git, with `EAS_NO_VCS=1`.)
 - `.easignore` keeps tests/scripts out of build uploads.
+- **Foreground service contract** (`AlarmService`): a service started with
+  `startForegroundService()` must call `startForeground()` — even `stopSelf()` before it
+  crashes the app. So `startForeground` is the FIRST thing in `onStartCommand`, the session
+  check comes after it, and both the start call and `startForeground` are wrapped in
+  try/catch (background-start refusal → `startFallback`).
+- **`handler.removeCallbacksAndMessages(null)` removes every runnable** — in the first
+  1.1.0 build it ran right after `startSound()` and killed the volume ramp, so the alarm
+  would have stayed at 20% volume. Clear first, then post; the timeout is an explicit
+  `Runnable` field.
 - **Android `Alert` shows at most 3 buttons** (`buttons.slice(0, 3)` — the rest are
   silently dropped) and is not dismissable by tapping outside unless
   `{ cancelable: true }`. Menus without a "Bekor" button must pass it.

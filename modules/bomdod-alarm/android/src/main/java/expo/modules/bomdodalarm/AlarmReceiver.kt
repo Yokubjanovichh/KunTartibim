@@ -53,8 +53,13 @@ class AlarmReceiver : BroadcastReceiver() {
       // Telefon oʻchiq turib, Bomdod vaqti chiqib ketgan boʻlsa — chalishdan maʼno yoʻq
       if (item.endAt > 0 && now > item.endAt) return
       AlarmStore.saveSession(context, Session(item.at, item.endAt, item.title, item.body, firedAt = now))
-    } else if (AlarmStore.session(context) == null) {
-      return
+    } else {
+      val session = AlarmStore.session(context) ?: return
+      // Keyinga surilgan / qayta chalish quyosh chiqqandan keyin tushdi — Bomdod vaqti tugagan
+      if (session.endAt > 0 && now > session.endAt) {
+        AlarmControl.expire(context)
+        return
+      }
     }
 
     AlarmControl.startRinging(context, kind)

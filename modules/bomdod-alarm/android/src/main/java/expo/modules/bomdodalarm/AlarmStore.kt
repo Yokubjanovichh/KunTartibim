@@ -181,21 +181,26 @@ internal object AlarmStore {
         .put("firedAt", s.firedAt)
         .put("dismissedAt", dismissedAt)
         .put("snoozes", s.snoozes)
-        .put("rechecked", false),
+        .put("rechecked", false)
+        .put("asleep", false),
     )
     writeLog(c, arr)
   }
 
-  /** Tekshiruvga javob bermagani uchun budilnik qayta chaldi — oxirgi yozuvni yangilaymiz */
-  fun markLastRechecked(c: Context, at: Long, dismissedAt: Long) {
+  /**
+   * "Turdim"dan keyingi bosqich: tekshiruvdan keyin qayta chalgan (rechecked), keyinga
+   * surishlar soni, yangi "Turdim" vaqti yoki qayta chalishga javob yoʻq (asleep).
+   */
+  fun updateLog(c: Context, s: Session, dismissedAt: Long? = null, asleep: Boolean = false) {
     val arr = readLog(c)
     for (i in arr.length() - 1 downTo 0) {
       val o = arr.getJSONObject(i)
-      if (o.optLong("at") == at) {
-        o.put("rechecked", true)
-        o.put("dismissedAt", dismissedAt)
-        break
-      }
+      if (o.optLong("at") != s.at) continue
+      o.put("snoozes", s.snoozes)
+      o.put("rechecked", s.rechecked)
+      o.put("asleep", asleep)
+      if (dismissedAt != null) o.put("dismissedAt", dismissedAt)
+      break
     }
     writeLog(c, arr)
   }
@@ -210,6 +215,7 @@ internal object AlarmStore {
         "dismissedAt" to o.optLong("dismissedAt").toDouble(),
         "snoozes" to o.optInt("snoozes"),
         "rechecked" to o.optBoolean("rechecked"),
+        "asleep" to o.optBoolean("asleep"),
       )
     }
   }
