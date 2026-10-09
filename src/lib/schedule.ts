@@ -15,12 +15,17 @@
  * Belgilangan namozning eslatmalari rejaga kirmaydi — sinxronlash ularni bekor qiladi.
  */
 
+import { sleepHoursUntil } from './habits';
 import type { PrayerCalendar } from './prayer-times';
 import { FARZ, PRAYER_NAME, type PrayerId, prayerKey } from './prayers';
 import type { RecordStatus } from './status';
-import { addDays, addMinutes, atTime, hhmm } from './time';
+import { addDays, addMinutes, atTime, eveningAt, hhmm } from './time';
 
-export type NotificationKind = 'start' | 'warn' | 'review' | 'qazo' | 'snooze' | 'test' | 'unknown';
+function clip(s: string, max: number): string {
+  return s.length <= max ? s : `${s.slice(0, max - 1).trimEnd()}…`;
+}
+
+export type NotificationKind = 'start' | 'warn' | 'review' | 'qazo' | 'sleep' | 'snooze' | 'test' | 'unknown';
 
 /**
  * Bildirishnoma tugmalari toʻplamlari.
@@ -61,6 +66,10 @@ export interface PlanSettings {
   qazoTime: string;
   /** Kunlik qazo maqsadi — necha kunlik (1 kunlik = 6 namoz) */
   qazoDailyDays: number;
+  /** Yotish vaqti eslatmasi — kech yotish muammosi uchun */
+  bedtimeEnabled: boolean;
+  /** 'HH:MM'; 00:00–11:59 yarim tundan keyin deb olinadi */
+  bedtime: string;
 }
 
 export const DEFAULT_PLAN_SETTINGS: PlanSettings = {
@@ -70,16 +79,22 @@ export const DEFAULT_PLAN_SETTINGS: PlanSettings = {
   qazoReminder: true,
   qazoTime: '20:30',
   qazoDailyDays: 1,
+  bedtimeEnabled: true,
+  bedtime: '23:00',
 };
 
 export interface PlanInput {
   now: Date;
-  /** Necha kun oldinga. 10 kun ≈ 110 ta eslatma (Android chegarasi 500). */
+  /** Necha kun oldinga. 10 kun ≈ 120 ta eslatma (Android chegarasi 500). */
   horizonDays: number;
   cal: PrayerCalendar;
   records: ReadonlyMap<string, RecordStatus>;
   settings: PlanSettings;
   qazoTotal: number;
+  /** Kun → oʻsha kunning ochiq "asosiy" ishlari (Bomdod eslatmasida koʻrsatiladi) */
+  topTasks?: ReadonlyMap<string, string[]>;
+  /** Kechqurun rejasi tuzilgan kunlar */
+  plannedDays?: ReadonlySet<string>;
 }
 
 const END_LABEL: Record<string, string> = {
@@ -110,13 +125,19 @@ export function buildPlan(input: PlanInput): PlannedNotification[] {
       const win = w[p];
 
       if (win.start.getTime() > t0) {
+        // Ertalab birinchi koʻriladigan narsa — kunning asosiy ishi shu yerda turadi
+        const top = p === 'bomdod' ? (input.topTasks?.get(day) ?? []) : [];
+        const tail =
+          p === 'xufton'
+            ? ' · Vitrni ham unutmang'
+            : top.length
+              ? ` · Bugun asosiy: ${clip(top.join(', '), 60)}`
+              : ' · Oʻqigach belgilang';
         out.push({
           id: `start:${day}:${p}`,
           at: win.start,
           title: `${PRAYER_NAME[p]} vaqti kirdi`,
-          body:
-            `${hhmm(win.start)} – ${hhmm(win.end)}` +
-            (p === 'xufton' ? ' · Vitrni ham unutmang' : ' · Oʻqigach belgilang'),
+          body: `${hhmm(win.start)} – ${hhmm(win.end)}${tail}`,
           category: p === 'xufton' ? 'isha' : 'prayer',
           data: { kind: 'start', day, prayers: [p] },
         });
@@ -138,24 +159,44 @@ export function buildPlan(input: PlanInput): PlannedNotification[] {
       }
     }
 
-    // ── Kun yakuni ──
+    // ── Kun yakuni va ertangi reja ──
     const isha = w.xufton;
-    let reviewAt = atTime(day, settings.reviewTime);
+    const nextDay = addDays(day, 1);
+    const planned = input.plannedDays?.has(nextDay) ?? false;
+    let reviewAt = eveningAt(day, settings.reviewTime);
     const earliest = addMinutes(isha.start, REVIEW_MIN_AFTER_ISHA);
     if (reviewAt.getTime() < earliest.getTime()) reviewAt = earliest;
     if (reviewAt.getTime() > t0 && reviewAt.getTime() < isha.end.getTime()) {
       const pending = (['xufton', 'vitr'] as PrayerId[]).filter((p) => !marked(day, p));
       const names = pending.map((p) => PRAYER_NAME[p]).join(' va ');
+      const ask = planned ? 'Bugungi kunni yoping — 1 daqiqa.' : 'Kunni yoping va ertangi rejani tuzing — 2 daqiqa.';
       out.push({
         id: `review:${day}`,
         at: reviewAt,
         title: 'Kun yakuni',
-        body: pending.length
-          ? `${names} belgilanmagan. Bugungi kunni koʻrib chiqing.`
-          : 'Bugungi kunni koʻrib chiqing — 1 daqiqa.',
+        body: pending.length ? `${names} belgilanmagan. ${ask}` : ask,
         category: pending.length ? 'review' : 'info',
         data: { kind: 'review', day, prayers: pending, route: '/review' },
       });
+    }
+
+    // ── Yotish vaqti ──
+    if (settings.bedtimeEnabled) {
+      const at = eveningAt(day, settings.bedtime);
+      const wake = w.xufton.end; // ertangi Bomdod
+      if (at.getTime() > t0 && at.getTime() < wake.getTime()) {
+        const hours = String(sleepHoursUntil(at, wake)).replace('.', ',');
+        out.push({
+          id: `sleep:${day}`,
+          at,
+          title: 'Yotish vaqti',
+          body:
+            `Ertangi Bomdod ${hhmm(wake)} da — hozir yotsangiz ${hours} soat uxlaysiz.` +
+            (planned ? ' Reja tayyor.' : ' Ertangi reja hali tuzilmagan.'),
+          category: 'info',
+          data: { kind: 'sleep', day, ...(planned ? {} : { route: '/review' }) },
+        });
+      }
     }
 
     // ── Qazo eslatmasi ──

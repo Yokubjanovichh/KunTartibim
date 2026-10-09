@@ -28,6 +28,8 @@ const KEYS = {
   qazoReminder: 'qazo_reminder',
   qazoTime: 'qazo_time',
   qazoDailyDays: 'qazo_daily_days',
+  bedtimeEnabled: 'bedtime_enabled',
+  bedtime: 'bedtime',
 } as const;
 
 function readBool(key: string, fallback: boolean): boolean {
@@ -82,6 +84,8 @@ export function loadSettings(): AppSettings {
     qazoReminder: readBool(KEYS.qazoReminder, d.qazoReminder),
     qazoTime: readTime(KEYS.qazoTime, d.qazoTime),
     qazoDailyDays: readInt(KEYS.qazoDailyDays, d.qazoDailyDays, 1, 10),
+    bedtimeEnabled: readBool(KEYS.bedtimeEnabled, d.bedtimeEnabled),
+    bedtime: readTime(KEYS.bedtime, d.bedtime),
   };
 }
 

@@ -12,7 +12,9 @@ Read the versioned docs at https://docs.expo.dev/versions/v56.0.0/ before using 
 ## Commands
 
 ```
-npm test                 # pure logic tests (tsx), TZ forced to Asia/Tashkent
+npm test                 # logic + DB tests (tsx), TZ forced to Asia/Tashkent;
+                         # DB tests run the real tracker.ts/plan.ts on node:sqlite
+                         # via tests/shims (expo-sqlite is redirected there)
 npm run typecheck        # app + tests (tests have their own tsconfig with node types)
 npm run export:android   # Metro bundle check, --max-workers 1 (low-RAM safe)
 npm run icons            # regenerate assets/images/* (pure Node PNG renderer)
@@ -59,6 +61,14 @@ npm run icons            # regenerate assets/images/* (pure Node PNG renderer)
   `expo-router/entry` — route files are not loaded in headless mode.
   Both the task and the foreground listener may receive the same press →
   `claimResponse()` dedupes via `handled_responses`.
+- Phase 2 (planning): `blocks.ts` (tasks are placed relative to prayers — "Asrdan
+  keyin" — not clock times), `habits.ts` (pure: streaks, week progress, planning
+  streak), `plan.ts` (DB: tasks, habits, habit_log, day_plans). Tasks/habits use the
+  same *prayer day* as namoz — a late sleeper's 01:00 still belongs to "today".
+  UI: `ui/DayPlan.tsx` (Today screen sections), `ui/EveningPlan.tsx` (Tahlil: close the
+  day → plan tomorrow → "Reja tayyor ✓"). Max 3 priority (★) tasks per day; their
+  titles appear in that day's Bomdod notification. Habit links to goals come in phase 3
+  and must stay OPTIONAL (user requirement).
 - Data changes call `emitChange()`; screens read through `useDataVersion()`.
   React Compiler is deliberately OFF (in MoliyamApp it memoized DB reads into stale lists).
 
@@ -86,6 +96,9 @@ npm run icons            # regenerate assets/images/* (pure Node PNG renderer)
   user's real email must not appear in this public history. Never commit secrets.
   (The first APK build and OTA 5e04aae9 were made before git, with `EAS_NO_VCS=1`.)
 - `.easignore` keeps tests/scripts out of build uploads.
+- **Android `Alert` shows at most 3 buttons** (`buttons.slice(0, 3)` — the rest are
+  silently dropped) and is not dismissable by tapping outside unless
+  `{ cancelable: true }`. Menus without a "Bekor" button must pass it.
 - EAS project `@yokubjanovich/kuntartibim` (2a1c5d1b-ce60-4b29-8092-0a0bcdd632ae),
   channel/branch `preview`, keystore generated and stored by EAS.
 

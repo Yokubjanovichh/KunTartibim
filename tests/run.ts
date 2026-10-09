@@ -1,16 +1,17 @@
 /**
  * Testlar: `npm test`
  * Vaqt zonasi telefon bilan bir xil boʻlishi shart — sana chegaralari shunga bogʻliq.
- * Test fayllari dinamik yuklanadi: statik import TZ oʻrnatilishidan oldin bajarilardi.
+ * Modullar `require` bilan TZ va shim'lardan KEYIN yuklanadi (statik import
+ * ulardan oldin bajarilardi). Baza testlari expo-sqlite oʻrniga Node SQLite'ni ishlatadi.
  */
 process.env.TZ = 'Asia/Tashkent';
+require('./shims/register.cjs');
 
-async function main() {
-  await import('./prayer-times.test');
-  await import('./status.test');
-  await import('./schedule.test');
-  const { runAll } = await import('./harness');
-  await runAll();
-}
+require('./prayer-times.test');
+require('./status.test');
+require('./schedule.test');
+require('./habits.test');
+require('./db.test');
 
-main();
+const { runAll } = require('./harness') as typeof import('./harness');
+runAll();

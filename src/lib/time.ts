@@ -60,6 +60,15 @@ export function atTime(day: string, value: string): Date {
   return d;
 }
 
+/**
+ * Kechki vaqt: '23:00' — oʻsha kun kechasi, '00:30' — yarim tundan keyin (ertasi
+ * kalendar kuni). Kech yotadigan foydalanuvchi uchun yotish vaqti 00:30 boʻlishi mumkin.
+ */
+export function eveningAt(day: string, value: string): Date {
+  const minutes = parseHm(value) ?? 0;
+  return atTime(minutes < 12 * 60 ? addDays(day, 1) : day, value);
+}
+
 /** 4 500 000 ms → "1 soat 15 daqiqa"; 1 daqiqadan kam boʻlsa "1 daqiqa" */
 export function formatDuration(ms: number): string {
   const total = Math.max(1, Math.ceil(ms / 60_000));

@@ -31,12 +31,13 @@ test('Bomdoddan oldin reja kechagi namoz kunidan boshlanadi', () => {
   assert.ok(!p.some((n) => n.data.kind === 'start'), 'kechagi namozlarning vaqti allaqachon kirgan');
 });
 
-test('Bir kun: 5 ta start + 4 ta warn + kun yakuni = 10', () => {
+test('Bir kun: 5 ta start + 4 ta warn + kun yakuni + yotish vaqti = 11', () => {
   const p = plan().filter((n) => n.data.day === '2026-10-09');
   assert.equal(p.filter((n) => n.data.kind === 'start').length, 5);
   assert.equal(p.filter((n) => n.data.kind === 'warn').length, 4);
   assert.equal(p.filter((n) => n.data.kind === 'review').length, 1);
-  assert.equal(p.length, 10);
+  assert.equal(p.filter((n) => n.data.kind === 'sleep').length, 1);
+  assert.equal(p.length, 11);
 });
 
 test('Warn vaqti: oyna oxiridan 30 daqiqa oldin', () => {
@@ -133,4 +134,39 @@ test('readData: buzilgan yoki yoʻq maʼlumot — "unknown", hech narsa belgilan
   assert.equal(readData(undefined).kind, 'unknown');
   assert.equal(readData({ dataString: '{buzilgan' }).kind, 'unknown');
   assert.equal(readData({ data: null }).day, undefined);
+});
+
+test('Bomdod eslatmasida kunning asosiy ishi koʻrinadi', () => {
+  const topTasks = new Map([['2026-10-09', ['CV yangilash', 'Zal']]]);
+  const bomdod = plan({ topTasks }).find((n) => n.id === 'start:2026-10-09:bomdod')!;
+  assert.match(bomdod.body, /Bugun asosiy: CV yangilash, Zal/);
+  // Boshqa namozlarda koʻrsatilmaydi
+  const peshin = plan({ topTasks }).find((n) => n.id === 'start:2026-10-09:peshin')!;
+  assert.doesNotMatch(peshin.body, /asosiy/);
+});
+
+test('Yotish vaqti: 23:00, ertangi Bomdodgacha uyqu soati va reja holati', () => {
+  const sleep = plan().find((n) => n.id === 'sleep:2026-10-09')!;
+  assert.equal(hhmm(sleep.at), '23:00');
+  assert.match(sleep.body, /Ertangi Bomdod 05:02 da — hozir yotsangiz 6 soat uxlaysiz/);
+  assert.match(sleep.body, /reja hali tuzilmagan/);
+  assert.equal(sleep.data.route, '/review');
+
+  const planned = plan({ plannedDays: new Set(['2026-10-10']) }).find((n) => n.id === 'sleep:2026-10-09')!;
+  assert.match(planned.body, /Reja tayyor/);
+  assert.equal(planned.data.route, undefined);
+});
+
+test('Yotish vaqti yarim tundan keyin (00:30) — ertasi kalendar kunida', () => {
+  const s = plan({ settings: { ...DEFAULT_PLAN_SETTINGS, bedtime: '00:30' } }).find((n) => n.id === 'sleep:2026-10-09')!;
+  assert.equal(s.at.getDate(), 10);
+  assert.equal(hhmm(s.at), '00:30');
+  assert.match(s.body, /4,5 soat/);
+});
+
+test('Kun yakuni ertangi reja tuzilmagan boʻlsa shuni soʻraydi', () => {
+  const r = plan().find((n) => n.id === 'review:2026-10-09')!;
+  assert.match(r.body, /ertangi rejani tuzing/);
+  const done = plan({ plannedDays: new Set(['2026-10-10']) }).find((n) => n.id === 'review:2026-10-09')!;
+  assert.doesNotMatch(done.body, /ertangi rejani/);
 });

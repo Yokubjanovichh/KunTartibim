@@ -27,6 +27,8 @@ function migrate(conn: SQLite.SQLiteDatabase): void {
   conn.execSync('PRAGMA journal_mode = WAL;');
   // Fon vazifasi va ilova bir vaqtda yozsa, darhol xato bermay biroz kutsin
   conn.execSync('PRAGMA busy_timeout = 3000;');
+  // Odat oʻchirilsa, uning belgilari ham oʻchsin (ON DELETE CASCADE)
+  conn.execSync('PRAGMA foreign_keys = ON;');
 
   const row = conn.getFirstSync<{ user_version: number }>('PRAGMA user_version;');
   const current = row?.user_version ?? 0;

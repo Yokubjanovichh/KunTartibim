@@ -9,16 +9,18 @@ import { addDays, formatDayLong, formatDayShort, parseDay, weekdayShort, weekSta
 import { calendarFor, dayNotes, getDayNote, getRecords, makeupSince, markPrayer, setDayNote } from '../../lib/tracker';
 import { color, hairline, radius, space, type } from '../../theme/tokens';
 import { Button, Divider, Group, Progress, Row, ScreenScroll, SectionTitle, Spacer, Tap, Txt } from '../../ui';
+import { useDayPlan } from '../../ui/DayPlan';
+import { TodayClose, TomorrowPlan, WeekPlanStats } from '../../ui/EveningPlan';
 import { pressPrayer } from '../../ui/prayerActions';
 
 const SHORT: Record<PrayerId, string> = { bomdod: 'Bo', peshin: 'Pe', asr: 'As', shom: 'Sh', xufton: 'Xu', vitr: 'Vi' };
 
 /**
- * Tahlil — foydalanuvchi uchun eng muhim boʻlim.
- *   Kun yakuni: bugungi 6 namoz + qisqa xulosa (nima yaxshi boʻldi, nima xalaqit berdi)
- *   Hafta: jadval, zaif nuqta (qaysi namoz koʻp qazo boʻlyapti), haftalik xulosa
+ * Tahlil — foydalanuvchi uchun eng muhim boʻlim. Bitta ekran, yuqoridan pastga:
+ *   Kun yakuni: 6 namoz, odatlar, ishlar (qolganini ertaga), qisqa xulosa
+ *   Ertangi reja: ishlar, ★ asosiylar, uyqu hisobi, [Reja tayyor ✓] va seriya
+ *   Hafta: namoz jadvali, zaif nuqta, odatlar va reja natijasi, erta turish, xulosa
  *   30 kun: har bir namoz boʻyicha foiz
- * 2-bosqichda bu yerga vazifalar tahlili qoʻshiladi.
  */
 export default function ReviewScreen() {
   const now = useNow(30_000);
@@ -51,6 +53,7 @@ export default function ReviewScreen() {
     .sort((a, b) => b.n - a.n)[0];
 
   const pendingNight = (['xufton', 'vitr'] as PrayerId[]).filter((p) => todayStatus[p] === 'active');
+  const plan = useDayPlan(today);
 
   return (
     <ScreenScroll>
@@ -90,12 +93,18 @@ export default function ReviewScreen() {
         </View>
       )}
 
+      {/* ── Bugungi odatlar va ishlar: belgilash, qolganini ertaga oʻtkazish ── */}
+      <TodayClose today={today} habits={plan.habits} marks={plan.marks} tasks={plan.tasks} />
+
       <SectionTitle>Bugungi xulosa</SectionTitle>
       <NoteInput
         key={today}
         noteKey={today}
         placeholder={'Bugun nima yaxshi boʻldi? Nima xalaqit berdi?\nErtaga nimani boshqacha qilasiz?'}
       />
+
+      {/* ── Ertangi reja — kechqurun tuziladi, ertalab maqsad boʻladi ── */}
+      <TomorrowPlan today={today} now={now} cal={cal} habits={plan.habits} marks={plan.marks} />
 
       {/* ── Hafta ── */}
       <SectionTitle right={<Txt variant="caption" tone="faint">{formatDayShort(wStart)} – {formatDayShort(today)}</Txt>}>
@@ -146,6 +155,8 @@ export default function ReviewScreen() {
           </Txt>
         )}
       </View>
+
+      <WeekPlanStats wStart={wStart} today={today} habits={plan.habits} marks={plan.marks} bomdod={week.byPrayer.bomdod} />
 
       <SectionTitle>Hafta xulosasi</SectionTitle>
       <NoteInput key={`week:${wStart}`} noteKey={`week:${wStart}`} placeholder="Bu hafta qanday oʻtdi? Keyingi haftaga bitta niyat." />

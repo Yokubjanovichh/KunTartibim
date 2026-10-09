@@ -13,6 +13,7 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
+import { plannedDays, priorityTitlesByDay } from './plan';
 import { prayerKey } from './prayers';
 import { buildPlan, type CategoryId, type NotificationData, type PlannedNotification, readData } from './schedule';
 import { loadSettings } from './settings';
@@ -22,7 +23,7 @@ import { addDays } from './time';
 export const CHANNEL_PRAYER = 'namoz-vaqtlari';
 export const CHANNEL_GENERAL = 'kun-yakuni';
 
-/** 10 kun ≈ 110 ta eslatma. Ilova 10 kun ochilmasa ham namoz eslatmalari kelaveradi. */
+/** 10 kun ≈ 120 ta eslatma. Ilova 10 kun ochilmasa ham namoz eslatmalari kelaveradi. */
 export const HORIZON_DAYS = 10;
 
 /* ── Sozlash ──────────────────────────────────────────────────────────────── */
@@ -53,8 +54,8 @@ export async function configureNotifications(): Promise<void> {
   });
 
   await Notifications.setNotificationChannelAsync(CHANNEL_GENERAL, {
-    name: 'Kun yakuni va qazo',
-    description: 'Kunlik tahlil va qazo eslatmasi',
+    name: 'Kun yakuni, uyqu va qazo',
+    description: 'Kun yakuni va ertangi reja, yotish vaqti, qazo eslatmasi',
     importance: Notifications.AndroidImportance.HIGH,
     sound: 'default',
     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
@@ -181,6 +182,8 @@ async function syncOnce(now: Date): Promise<SyncResult> {
       records,
       settings,
       qazoTotal: qazoBalances().total,
+      topTasks: priorityTitlesByDay(firstDay, addDays(firstDay, HORIZON_DAYS)),
+      plannedDays: plannedDays(firstDay, addDays(firstDay, HORIZON_DAYS + 1)),
     });
 
     const want = new Map(plan.map((n) => [n.id, n]));

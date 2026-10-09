@@ -14,6 +14,7 @@ import { calendarFor, getRecords, markPrayer, reconcile } from '../../lib/tracke
 import { applyUpdate } from '../../lib/updates';
 import { color, space } from '../../theme/tokens';
 import { Badge, Button, Divider, Group, Notice, Progress, Row, ScreenScroll, Spacer, Tap, Txt } from '../../ui';
+import { HabitsSection, PlanSection, TopTasks, useDayPlan } from '../../ui/DayPlan';
 import { pressPrayer } from '../../ui/prayerActions';
 
 /** Necha kun orqaga koʻrish mumkin — tuzatishlar uchun yetarli */
@@ -49,6 +50,7 @@ export default function TodayScreen() {
   const qazoCount = PRAYERS.filter((p) => statuses[p] === 'qazo' || statuses[p] === 'missed').length;
 
   const onRowPress = (p: PrayerId) => pressPrayer(day, p, statuses[p], wins[p], now);
+  const plan = useDayPlan(day);
 
   const minDay = addDays(currentDay, -MAX_BACK_DAYS);
 
@@ -80,6 +82,9 @@ export default function TodayScreen() {
 
       {/* ── Hozir ── */}
       {isCurrent && <Hero now={now} info={info} statuses={statuses} warnMinutes={settings.warnMinutes} />}
+
+      {/* ── Kunning asosiy ishlari — kechqurun rejalangan maqsad ── */}
+      <TopTasks day={day} tasks={plan.tasks} />
 
       {/* ── Diqqat ── */}
       {update.ready && (
@@ -141,9 +146,13 @@ export default function TodayScreen() {
         )}
       </Row>
 
+      {/* ── Reja va odatlar ── */}
+      <PlanSection day={day} tasks={plan.tasks} times={times} now={now} isCurrent={isCurrent} />
+      <HabitsSection day={day} habits={plan.habits} marks={plan.marks} />
+
       <Txt variant="caption" tone="faint" style={styles.footer}>
         Toʻraqoʻrgʻon · islom.uz usuli (15,5°, Hanafiy){'\n'}
-        Qatorni bosing — belgilanadi. Qazoni tuzatish ham shu yerda.
+        Bosing — belgilanadi. Uzoq bosing — tahrirlash, ertaga oʻtkazish va boshqalar.
       </Txt>
     </ScreenScroll>
   );

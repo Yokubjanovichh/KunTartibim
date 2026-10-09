@@ -72,6 +72,8 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="setup" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
           <Stack.Screen name="qazo-add" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="task" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="habits" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
         </Stack>
       </SafeAreaProvider>
     </GestureHandlerRootView>

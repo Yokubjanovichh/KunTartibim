@@ -177,11 +177,24 @@ export default function SettingsScreen() {
         <Divider inset={space.lg} />
         <TimeRow
           title="Kun yakuni"
-          hint="Xufton/Vitr tekshiruvi va tahlil"
+          hint="Kunni yopish va ertangi reja"
           value={settings.reviewTime}
           min={18 * 60}
           onChange={(v) => saveSettings({ reviewTime: v })}
         />
+        <Divider inset={space.lg} />
+        <ListRow
+          title="Yotish vaqti"
+          hint="Ertangi Bomdodgacha necha soat uyqu qolganini aytadi"
+          right={<Toggle value={settings.bedtimeEnabled} />}
+          onPress={() => saveSettings({ bedtimeEnabled: !settings.bedtimeEnabled })}
+        />
+        {settings.bedtimeEnabled && (
+          <>
+            <Divider inset={space.lg} />
+            <NightTimeRow title="Soat" hint="Yarim tundan keyin ham boʻladi — asta-sekin oldinga suring" value={settings.bedtime} onChange={(v) => saveSettings({ bedtime: v })} />
+          </>
+        )}
         <Divider inset={space.lg} />
         <ListRow
           title="Qazo eslatmasi"
@@ -216,6 +229,12 @@ export default function SettingsScreen() {
           right={scheduled ? `${scheduled.count} ta` : '…'}
           onPress={loadScheduled}
         />
+      </Group>
+
+      {/* ── Reja ── */}
+      <SectionTitle>Reja</SectionTitle>
+      <Group>
+        <ListRow title="Odatlar" hint="Qoʻshish, tahrirlash, arxiv" right="›" onPress={() => router.push('/habits')} />
       </Group>
 
       {/* ── Ilova ── */}
@@ -272,6 +291,22 @@ function TimeRow({
       title={title}
       hint={hint}
       right={<Stepper value={minutes} min={min} max={23 * 60 + 45} step={15} onChange={(v) => onChange(formatHm(v))} format={formatHm} />}
+    />
+  );
+}
+
+/**
+ * Kechki vaqt: 20:00 dan ertasi 02:00 gacha. Ichkarida yarim tundan keyingi vaqtlar
+ * 24 soat qoʻshib saqlanadi, shunda stepper 23:45 → 00:00 → 00:15 tarzida uzluksiz yuradi.
+ */
+function NightTimeRow({ title, hint, value, onChange }: { title: string; hint?: string; value: string; onChange: (v: string) => void }) {
+  const raw = parseHm(value) ?? 23 * 60;
+  const minutes = raw < 12 * 60 ? raw + 24 * 60 : raw;
+  return (
+    <ListRow
+      title={title}
+      hint={hint}
+      right={<Stepper value={minutes} min={20 * 60} max={26 * 60} step={15} onChange={(v) => onChange(formatHm(v))} format={formatHm} />}
     />
   );
 }
