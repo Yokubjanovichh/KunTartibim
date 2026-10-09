@@ -6,7 +6,7 @@
  * shuning uchun ilovani oʻchirmasdan yangilaganda maʼlumot saqlanib qoladi.
  */
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export const MIGRATIONS: { version: number; sql: string }[] = [
   {
@@ -103,6 +103,14 @@ export const MIGRATIONS: { version: number; sql: string }[] = [
         day         TEXT PRIMARY KEY,
         planned_at  TEXT NOT NULL
       );
+    `,
+  },
+  {
+    // Kunlik reja: ishga aniq vaqt va eslatma (ixtiyoriy)
+    version: 3,
+    sql: /* sql */ `
+      ALTER TABLE tasks ADD COLUMN time TEXT;              -- 'HH:MM' yoki NULL (namoz bloki yetarli)
+      ALTER TABLE tasks ADD COLUMN remind_before INTEGER;  -- necha daqiqa oldin; NULL = eslatmasiz
     `,
   },
 ];

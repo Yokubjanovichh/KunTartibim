@@ -15,6 +15,7 @@
  * Belgilangan namozning eslatmalari rejaga kirmaydi — sinxronlash ularni bekor qiladi.
  */
 
+import { type BlockId, momentOnPrayerDay } from './blocks';
 import { sleepHoursUntil } from './habits';
 import type { PrayerCalendar } from './prayer-times';
 import { FARZ, PRAYER_NAME, type PrayerId, prayerKey } from './prayers';
@@ -25,7 +26,7 @@ function clip(s: string, max: number): string {
   return s.length <= max ? s : `${s.slice(0, max - 1).trimEnd()}…`;
 }
 
-export type NotificationKind = 'start' | 'warn' | 'review' | 'qazo' | 'sleep' | 'snooze' | 'test' | 'unknown';
+export type NotificationKind = 'start' | 'warn' | 'review' | 'qazo' | 'sleep' | 'task' | 'snooze' | 'test' | 'unknown';
 
 /**
  * Bildirishnoma tugmalari toʻplamlari.
@@ -33,14 +34,17 @@ export type NotificationKind = 'start' | 'warn' | 'review' | 'qazo' | 'sleep' | 
  *   isha   — [Xufton ✓] [Xufton + Vitr ✓] [15 daqiqadan keyin]
  *   review — [Hammasini oʻqidim ✓]
  *   qazo   — [Oʻqidim ✓]
+ *   task   — [Bajarildi ✓] [15 daqiqadan keyin]
  *   info   — tugmasiz
  */
-export type CategoryId = 'prayer' | 'isha' | 'review' | 'qazo' | 'info';
+export type CategoryId = 'prayer' | 'isha' | 'review' | 'qazo' | 'task' | 'info';
 
 export interface NotificationData {
   kind: NotificationKind;
   day?: string;
   prayers?: PrayerId[];
+  /** Vaqtli ish eslatmasi uchun */
+  taskId?: number;
   /** Bosilganda ochiladigan ekran */
   route?: string;
   /** Kontent xeshi — sinxronlashda oʻzgarganini aniqlash uchun */
@@ -95,7 +99,29 @@ export interface PlanInput {
   topTasks?: ReadonlyMap<string, string[]>;
   /** Kechqurun rejasi tuzilgan kunlar */
   plannedDays?: ReadonlySet<string>;
+  /** `${day}:${block}` → shu blokdagi ochiq ishlar — namoz eslatmasida "Keyin: …" */
+  blockTasks?: ReadonlyMap<string, string[]>;
+  /** Eslatmasi bor vaqtli ishlar */
+  taskReminders?: readonly TaskReminder[];
 }
+
+export interface TaskReminder {
+  id: number;
+  title: string;
+  day: string;
+  time: string;
+  /** daqiqa; 0 = vaqtida */
+  remindBefore: number;
+}
+
+/** Namozdan keyingi blok: Asr vaqti kirganda "Asrdan keyin" ishlari eslatiladi */
+const PRAYER_BLOCK: Record<string, BlockId> = {
+  bomdod: 'morning',
+  peshin: 'noon',
+  asr: 'afternoon',
+  shom: 'evening',
+  xufton: 'night',
+};
 
 const END_LABEL: Record<string, string> = {
   bomdod: 'Quyosh chiqadi',
@@ -125,13 +151,16 @@ export function buildPlan(input: PlanInput): PlannedNotification[] {
       const win = w[p];
 
       if (win.start.getTime() > t0) {
-        // Ertalab birinchi koʻriladigan narsa — kunning asosiy ishi shu yerda turadi
+        // Ertalab birinchi koʻriladigan narsa — kunning asosiy ishi; boshqa namozlarda —
+        // shu namozdan keyingi blokka rejalangan ishlar
         const top = p === 'bomdod' ? (input.topTasks?.get(day) ?? []) : [];
-        const tail =
-          p === 'xufton'
-            ? ' · Vitrni ham unutmang'
-            : top.length
-              ? ` · Bugun asosiy: ${clip(top.join(', '), 60)}`
+        const next = input.blockTasks?.get(`${day}:${PRAYER_BLOCK[p]}`) ?? [];
+        const tail = top.length
+          ? ` · Bugun asosiy: ${clip(top.join(', '), 60)}`
+          : next.length
+            ? `${p === 'xufton' ? ' · Vitrni unutmang' : ''} · Keyin: ${clip(next.join(', '), 60)}`
+            : p === 'xufton'
+              ? ' · Vitrni ham unutmang'
               : ' · Oʻqigach belgilang';
         out.push({
           id: `start:${day}:${p}`,
@@ -215,7 +244,27 @@ export function buildPlan(input: PlanInput): PlannedNotification[] {
     }
   }
 
+  // ── Vaqtli ishlar ──
+  for (const r of input.taskReminders ?? []) {
+    const moment = momentOnPrayerDay(cal.times(r.day), r.day, r.time);
+    const at = addMinutes(moment, -r.remindBefore);
+    if (at.getTime() <= t0) continue;
+    out.push({
+      id: `task:${r.id}`,
+      at,
+      title: r.title,
+      body: r.remindBefore > 0 ? `${hhmm(moment)} da · ${formatBefore(r.remindBefore)} qoldi` : `Vaqti keldi · ${hhmm(moment)}`,
+      category: 'task',
+      data: { kind: 'task', taskId: r.id, day: r.day, route: '/' },
+    });
+  }
+
   return out.map((n) => ({ ...n, data: { ...n.data, h: contentHash(n) } }));
+}
+
+function formatBefore(min: number): string {
+  if (min % 60 === 0) return `${min / 60} soat`;
+  return `${min} daqiqa`;
 }
 
 /**

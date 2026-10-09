@@ -69,6 +69,14 @@ npm run icons            # regenerate assets/images/* (pure Node PNG renderer)
   day → plan tomorrow → "Reja tayyor ✓"). Max 3 priority (★) tasks per day; their
   titles appear in that day's Bomdod notification. Habit links to goals come in phase 3
   and must stay OPTIONAL (user requirement).
+- **Daily planning comes first, habits are secondary** (user, 2026-10-09: "odatlardan
+  ko'ra kunlik ishlarni rejalashtirish muhimroq"). The Today screen is one "Kun tartibi":
+  each prayer row with its block's tasks nested under it (`BLOCK_AFTER`); habits render
+  only if the user created some. Tasks may have an exact `time` (+ optional
+  `remind_before`) — the block is then derived from the time (`blockForTime`), times
+  before Bomdod belong to the prayer day's night (`momentOnPrayerDay`). Timed tasks get
+  their own notification (`task:<id>`, channel `ishlar`, [Bajarildi ✓] handled by the
+  background task); prayer start notifications list that block's tasks ("Keyin: …").
 - Data changes call `emitChange()`; screens read through `useDataVersion()`.
   React Compiler is deliberately OFF (in MoliyamApp it memoized DB reads into stale lists).
 

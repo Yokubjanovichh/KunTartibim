@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 
-import { blockStart, currentBlock } from '../src/lib/blocks';
+import { blockForTime, blockStart, currentBlock, momentOnPrayerDay } from '../src/lib/blocks';
 import { habitMeta, type Habit, markKey, planningStreak, sleepHoursUntil, streak, weekProgress } from '../src/lib/habits';
 import { computeDayTimes, TORAQORGON } from '../src/lib/prayer-times';
 import { eveningAt, hhmm, isoDay } from '../src/lib/time';
@@ -90,4 +90,16 @@ test('Bloklar: Asrdan keyin — Asr vaqtidan; tushda joriy blok "Peshindan keyin
   assert.equal(currentBlock(t, new Date(2026, 9, 9, 13, 0)), 'noon');
   assert.equal(currentBlock(t, new Date(2026, 9, 9, 4, 0)), null);
   assert.equal(currentBlock(t, new Date(2026, 9, 9, 20, 0)), 'night');
+});
+
+test('Vaqt → blok: 14:00 Peshindan keyin, 06:00 Bomdoddan keyin, 01:00 tun (ertasi sana)', () => {
+  const t = computeDayTimes('2026-10-09', TORAQORGON);
+  assert.equal(blockForTime(t, '2026-10-09', '14:00'), 'noon');
+  assert.equal(blockForTime(t, '2026-10-09', '06:00'), 'morning');
+  assert.equal(blockForTime(t, '2026-10-09', '16:30'), 'afternoon');
+  assert.equal(blockForTime(t, '2026-10-09', '18:00'), 'evening');
+  assert.equal(blockForTime(t, '2026-10-09', '01:00'), 'night');
+  const late = momentOnPrayerDay(t, '2026-10-09', '01:00');
+  assert.equal(isoDay(late), '2026-10-10', 'yarim tundan keyin — ertasi kalendar kuni');
+  assert.equal(isoDay(momentOnPrayerDay(t, '2026-10-09', '23:00')), '2026-10-09');
 });

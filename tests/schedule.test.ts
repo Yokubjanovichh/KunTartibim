@@ -170,3 +170,32 @@ test('Kun yakuni ertangi reja tuzilmagan boʻlsa shuni soʻraydi', () => {
   const done = plan({ plannedDays: new Set(['2026-10-10']) }).find((n) => n.id === 'review:2026-10-09')!;
   assert.doesNotMatch(done.body, /ertangi rejani/);
 });
+
+test('Vaqtli ish: eslatma "N daqiqa oldin", oʻtgan vaqtga qoʻyilmaydi', () => {
+  const taskReminders = [
+    { id: 7, title: 'Interview', day: '2026-10-09', time: '15:00', remindBefore: 60 },
+    { id: 8, title: 'Qoʻngʻiroq', day: '2026-10-09', time: '03:30', remindBefore: 0 }, // tun → 10-okt 03:30
+    { id: 9, title: 'Oʻtib ketgan', day: '2026-10-08', time: '10:00', remindBefore: 0 },
+  ];
+  const p = plan({ taskReminders });
+  const a = p.find((n) => n.id === 'task:7')!;
+  assert.equal(hhmm(a.at), '14:00');
+  assert.equal(a.category, 'task');
+  assert.equal(a.data.taskId, 7);
+  assert.match(a.body, /15:00 da · 1 soat qoldi/);
+  const b = p.find((n) => n.id === 'task:8')!;
+  assert.equal(b.at.getDate(), 10, 'namoz kunining tuni — ertasi sana');
+  assert.match(b.body, /Vaqti keldi · 03:30/);
+  assert.ok(!p.some((n) => n.id === 'task:9'));
+});
+
+test('Namoz eslatmasi oʻsha blok ishlarini aytadi: "Asr vaqti kirdi · Keyin: …"', () => {
+  const blockTasks = new Map([
+    ['2026-10-09:afternoon', ['Leetcode 2 masala', 'CV (16:30)']],
+    ['2026-10-09:night', ['Kitob']],
+  ]);
+  const p = plan({ blockTasks });
+  assert.match(p.find((n) => n.id === 'start:2026-10-09:asr')!.body, /Keyin: Leetcode 2 masala, CV \(16:30\)/);
+  assert.match(p.find((n) => n.id === 'start:2026-10-09:xufton')!.body, /Vitrni unutmang · Keyin: Kitob/);
+  assert.doesNotMatch(p.find((n) => n.id === 'start:2026-10-09:peshin')!.body, /Keyin/);
+});

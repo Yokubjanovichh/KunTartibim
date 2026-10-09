@@ -10,6 +10,7 @@ import { getDb } from '../db/client';
 import { type BlockId, isBlockId } from './blocks';
 import { emitChange } from './events';
 import { type Habit, type HabitKind, markKey } from './habits';
+import { parseHm } from './time';
 
 /* ── Vazifalar ────────────────────────────────────────────────────────────── */
 
@@ -21,6 +22,10 @@ export interface Task {
   /** null — sanasiz ("keyinroq" roʻyxati) */
   day: string | null;
   block: BlockId | null;
+  /** Aniq vaqt 'HH:MM' (ixtiyoriy). Boʻlsa, blok shu vaqtdan kelib chiqadi. */
+  time: string | null;
+  /** Eslatma: necha daqiqa oldin (0 = vaqtida); null — eslatmasiz */
+  remindBefore: number | null;
   priority: number;
   status: TaskStatus;
   doneAt: string | null;
@@ -31,14 +36,21 @@ export interface Task {
 /** Bir kunda koʻpi bilan shuncha "asosiy" ish — hammasi asosiy boʻlsa, hech biri asosiy emas */
 export const MAX_PRIORITY = 3;
 
-const TASK_COLUMNS = `id, title, day, block, priority, status, done_at AS doneAt,
-  moved_count AS movedCount, created_at AS createdAt`;
+const TASK_COLUMNS = `id, title, day, block, time, remind_before AS remindBefore, priority, status,
+  done_at AS doneAt, moved_count AS movedCount, created_at AS createdAt`;
 
 function normalize(t: Task): Task {
-  return { ...t, block: isBlockId(t.block) ? t.block : null };
+  const time = t.time && parseHm(t.time) !== null ? t.time : null;
+  return {
+    ...t,
+    block: isBlockId(t.block) ? t.block : null,
+    time,
+    remindBefore: time && t.remindBefore !== null && t.remindBefore >= 0 ? t.remindBefore : null,
+  };
 }
 
-const ORDER = `ORDER BY priority DESC, status = 'done', id`;
+// Vaqtli ishlar vaqt boʻyicha, vaqtsizlar keyin; bajarilganlar oxirida
+const ORDER = `ORDER BY priority DESC, status = 'done', time IS NULL, time, id`;
 
 export function tasksForDay(day: string): Task[] {
   return getDb()
@@ -83,34 +95,53 @@ export function priorityCount(day: string, exceptId?: number): number {
   return row?.n ?? 0;
 }
 
-export function addTask(input: { title: string; day: string | null; block?: BlockId | null; priority?: boolean }): number {
+export interface TaskInput {
+  title: string;
+  day: string | null;
+  block?: BlockId | null;
+  priority?: boolean;
+  time?: string | null;
+  remindBefore?: number | null;
+}
+
+export function addTask(input: TaskInput): number {
   const title = input.title.trim();
   if (!title) return 0;
   // Limitdan oshsa, ish oddiy boʻlib qoʻshiladi — foydalanuvchi tanlovini yoʻqotmaymiz
   const priority = input.priority && input.day && priorityCount(input.day) < MAX_PRIORITY ? 1 : 0;
+  // Sanasiz ishda vaqt maʼnosiz
+  const time = input.day && input.time && parseHm(input.time) !== null ? input.time : null;
   const res = getDb().runSync(
-    'INSERT INTO tasks (title, day, block, priority, created_at) VALUES (?, ?, ?, ?, ?);',
-    [title, input.day, input.block ?? null, priority, new Date().toISOString()],
+    'INSERT INTO tasks (title, day, block, time, remind_before, priority, created_at) VALUES (?, ?, ?, ?, ?, ?, ?);',
+    [title, input.day, input.block ?? null, time, time ? (input.remindBefore ?? null) : null, priority, new Date().toISOString()],
   );
   emitChange();
   return Number(res.lastInsertRowId);
 }
 
-export function updateTask(id: number, patch: { title?: string; day?: string | null; block?: BlockId | null; priority?: boolean }): void {
+export function updateTask(id: number, patch: Partial<TaskInput>): void {
   const cur = getTask(id);
   if (!cur) return;
   const day = patch.day !== undefined ? patch.day : cur.day;
   const wantsPriority = patch.priority !== undefined ? patch.priority : cur.priority === 1;
   const priority = wantsPriority && day && priorityCount(day, id) < MAX_PRIORITY ? 1 : 0;
   const moved = cur.day && day && day > cur.day ? 1 : 0;
-  getDb().runSync('UPDATE tasks SET title = ?, day = ?, block = ?, priority = ?, moved_count = moved_count + ? WHERE id = ?;', [
-    (patch.title ?? cur.title).trim() || cur.title,
-    day,
-    patch.block !== undefined ? patch.block : cur.block,
-    priority,
-    moved,
-    id,
-  ]);
+  const rawTime = patch.time !== undefined ? patch.time : cur.time;
+  const time = day && rawTime && parseHm(rawTime) !== null ? rawTime : null;
+  const remind = time ? (patch.remindBefore !== undefined ? patch.remindBefore : cur.remindBefore) : null;
+  getDb().runSync(
+    'UPDATE tasks SET title = ?, day = ?, block = ?, time = ?, remind_before = ?, priority = ?, moved_count = moved_count + ? WHERE id = ?;',
+    [
+      (patch.title ?? cur.title).trim() || cur.title,
+      day,
+      patch.block !== undefined ? patch.block : cur.block,
+      time,
+      remind ?? null,
+      priority,
+      moved,
+      id,
+    ],
+  );
   emitChange();
 }
 
@@ -131,9 +162,11 @@ export function moveTasks(ids: number[], toDay: string | null): void {
     for (const id of ids) {
       db.runSync(
         `UPDATE tasks SET day = ?, moved_count = moved_count + CASE WHEN day IS NOT NULL THEN 1 ELSE 0 END,
-           priority = CASE WHEN ? IS NULL THEN 0 ELSE priority END
+           priority = CASE WHEN ? IS NULL THEN 0 ELSE priority END,
+           time = CASE WHEN ? IS NULL THEN NULL ELSE time END,
+           remind_before = CASE WHEN ? IS NULL THEN NULL ELSE remind_before END
          WHERE id = ?;`,
-        [toDay, toDay, id],
+        [toDay, toDay, toDay, toDay, id],
       );
     }
     // Koʻchirilganlar orasida asosiy ishlar limitdan oshsa — ortiqchasi oddiy boʻladi
@@ -168,6 +201,39 @@ export function priorityTitlesByDay(fromDay: string, toDay: string): Map<string,
   const map = new Map<string, string[]>();
   for (const r of rows) map.set(r.day, [...(map.get(r.day) ?? []), r.title]);
   return map;
+}
+
+/** Eslatmasi bor ochiq vaqtli ishlar (bildirishnoma rejasi uchun) */
+export function taskReminders(fromDay: string, toDay: string): Task[] {
+  return getDb()
+    .getAllSync<Task>(
+      `SELECT ${TASK_COLUMNS} FROM tasks
+        WHERE status = 'open' AND day BETWEEN ? AND ? AND time IS NOT NULL AND remind_before IS NOT NULL;`,
+      [fromDay, toDay],
+    )
+    .map(normalize)
+    .filter((t) => t.time !== null && t.remindBefore !== null);
+}
+
+/** `${day}:${block}` → shu blokdagi ochiq ishlar (namoz eslatmasida "Keyin: …") */
+export function blockTaskTitles(fromDay: string, toDay: string): Map<string, string[]> {
+  const map = new Map<string, string[]>();
+  for (const t of getDb()
+    .getAllSync<Task>(
+      `SELECT ${TASK_COLUMNS} FROM tasks WHERE status = 'open' AND day BETWEEN ? AND ? AND block IS NOT NULL
+        ORDER BY time IS NULL, time, id;`,
+      [fromDay, toDay],
+    )
+    .map(normalize)) {
+    if (!t.day || !t.block) continue;
+    const key = `${t.day}:${t.block}`;
+    map.set(key, [...(map.get(key) ?? []), t.time ? `${t.title} (${t.time})` : t.title]);
+  }
+  return map;
+}
+
+export function isTaskOpen(id: number): boolean {
+  return getDb().getFirstSync<{ status: string }>('SELECT status FROM tasks WHERE id = ?;', [id])?.status === 'open';
 }
 
 /* ── Odatlar ──────────────────────────────────────────────────────────────── */

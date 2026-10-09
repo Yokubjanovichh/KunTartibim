@@ -13,7 +13,9 @@ import {
   addTask,
   archiveHabit,
   backlogTasks,
+  blockTaskTitles,
   habitMarks,
+  isTaskOpen,
   listHabits,
   markPlanned,
   MAX_PRIORITY,
@@ -23,6 +25,7 @@ import {
   priorityTitlesByDay,
   setHabitMark,
   setTaskDone,
+  taskReminders,
   tasksForDay,
   updateTask,
 } from '../src/lib/plan';
@@ -169,4 +172,23 @@ test('Kechki reja: qayta bosish xato bermaydi', () => {
   markPlanned('2026-10-10');
   markPlanned('2026-10-10');
   assert.deepEqual([...plannedDays('2026-10-01', '2026-10-31')], ['2026-10-10']);
+});
+
+test('Vaqtli ish: eslatmalar roʻyxati, blok nomlari, "keyinroq"ga olinsa vaqt oʻchadi', () => {
+  reset();
+  const a = addTask({ title: 'Interview', day: '2026-10-10', block: 'noon', time: '15:00', remindBefore: 60 });
+  addTask({ title: 'Eslatmasiz', day: '2026-10-10', block: 'noon', time: '13:00', remindBefore: null });
+  addTask({ title: 'Notoʻgʻri vaqt', day: '2026-10-10', time: '25:99', remindBefore: 0 });
+  addTask({ title: 'Sanasiz', day: null, time: '10:00', remindBefore: 0 });
+  assert.deepEqual(taskReminders('2026-10-09', '2026-10-11').map((t) => [t.title, t.time, t.remindBefore]), [['Interview', '15:00', 60]]);
+  assert.equal(tasksForDay('2026-10-10').find((t) => t.title === 'Notoʻgʻri vaqt')!.time, null);
+  assert.equal(backlogTasks()[0].time, null);
+  // Blok ichida vaqt boʻyicha: 13:00, keyin 15:00
+  assert.deepEqual(blockTaskTitles('2026-10-10', '2026-10-10').get('2026-10-10:noon'), ['Eslatmasiz (13:00)', 'Interview (15:00)']);
+  moveTasks([a], null);
+  const back = backlogTasks().find((t) => t.title === 'Interview')!;
+  assert.equal(back.time, null);
+  assert.equal(back.remindBefore, null);
+  assert.ok(!isTaskOpen(999));
+  assert.ok(isTaskOpen(a));
 });

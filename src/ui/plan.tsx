@@ -43,6 +43,7 @@ export function TaskRow({
   onLongPress,
   meta,
   right,
+  nested,
 }: {
   task: Task;
   onToggle: () => void;
@@ -51,11 +52,13 @@ export function TaskRow({
   meta?: string;
   /** Oʻng tomondagi qoʻshimcha tugmalar (Tahlil ekranida) */
   right?: ReactNode;
+  /** Kun tartibida namoz ostida — ichkariroq */
+  nested?: boolean;
 }) {
   const done = task.status === 'done';
   return (
     <Tap onPress={onToggle} onLongPress={onLongPress} scaleTo={0.985} delayLongPress={350}>
-      <Row style={styles.row}>
+      <Row style={[styles.row, nested && styles.nested]}>
         <Check state={done ? true : undefined} />
         <View style={{ flex: 1 }}>
           <Row style={{ justifyContent: 'flex-start', gap: space.sm }}>
@@ -145,6 +148,7 @@ export function MiniAction({ label, onPress, tone = 'muted' }: { label: string; 
 
 const styles = StyleSheet.create({
   row: { paddingHorizontal: space.lg, paddingVertical: space.md, minHeight: 52, gap: space.md, justifyContent: 'flex-start' },
+  nested: { paddingLeft: space.xxl, paddingVertical: space.sm + 2, minHeight: 44 },
   check: {
     borderWidth: 1.5,
     borderColor: color.borderStrong,

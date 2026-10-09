@@ -7,6 +7,7 @@
  */
 
 import type { DayTimes, TimeKey } from './prayer-times';
+import { atTime } from './time';
 
 export const BLOCKS = ['morning', 'noon', 'afternoon', 'evening', 'night'] as const;
 export type BlockId = (typeof BLOCKS)[number];
@@ -41,4 +42,20 @@ export function currentBlock(times: DayTimes, now: Date): BlockId | null {
   let found: BlockId | null = null;
   for (const b of BLOCKS) if (t >= blockStart(times, b).getTime()) found = b;
   return found;
+}
+
+/**
+ * Namoz kunidagi 'HH:MM' → aniq vaqt. Namoz kuni Bomdoddan ertangi Bomdodgacha,
+ * shuning uchun Bomdoddan oldingi soatlar (masalan, 01:00) — shu kunning tuni,
+ * yaʼni ertasi kalendar sanasi.
+ */
+export function momentOnPrayerDay(times: DayTimes, day: string, hm: string): Date {
+  const d = atTime(day, hm);
+  if (d.getTime() < times.bomdod.getTime()) d.setDate(d.getDate() + 1);
+  return d;
+}
+
+/** Aniq vaqtli ish qaysi blokka tushadi: 14:00 → "Peshindan keyin" */
+export function blockForTime(times: DayTimes, day: string, hm: string): BlockId {
+  return currentBlock(times, momentOnPrayerDay(times, day, hm)) ?? 'night';
 }

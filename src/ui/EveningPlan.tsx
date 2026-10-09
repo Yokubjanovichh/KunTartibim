@@ -17,7 +17,6 @@ import { useMemo, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 
 import { useDataVersion } from '../hooks/useData';
-import { BLOCK_LABEL } from '../lib/blocks';
 import { type Habit, habitMeta, isDaily, markKey, planningStreak, sleepHoursUntil, weekProgress } from '../lib/habits';
 import {
   addTask,
@@ -35,7 +34,7 @@ import {
 import type { PrayerCalendar } from '../lib/prayer-times';
 import { addDays, daysBetween, formatDayLong, hhmm, weekStart } from '../lib/time';
 import { color, hairline, radius, space, type } from '../theme/tokens';
-import { habitLongPress, taskActions } from './DayPlan';
+import { habitLongPress, taskActions, taskMeta } from './DayPlan';
 import { Button, Divider, Group, Progress, Row, SectionTitle, Spacer, Txt } from './index';
 import { HabitRow, MiniAction, TaskRow } from './plan';
 
@@ -61,6 +60,34 @@ export function TodayClose({
 
   return (
     <>
+      {/* Ishlar birinchi — foydalanuvchi uchun hozir kunlik reja odatlardan muhimroq */}
+      {tasks.length > 0 && (
+        <>
+          <SectionTitle right={<Txt variant="caption" tone="faint" numeric>{done.length}/{tasks.length}</Txt>}>
+            Bugungi ishlar
+          </SectionTitle>
+          <Group>
+            {[...open, ...done].map((t, i) => (
+              <View key={t.id}>
+                {i > 0 && <Divider inset={space.xxxl} />}
+                <TaskRow
+                  task={t}
+                  meta={taskMeta(t, { block: true })}
+                  onToggle={() => setTaskDone(t.id, t.status !== 'done')}
+                  onLongPress={() => taskActions(t, today)}
+                  right={t.status === 'open' ? <MiniAction label="Ertaga" onPress={() => moveTasks([t.id], tomorrow)} /> : undefined}
+                />
+              </View>
+            ))}
+          </Group>
+          {open.length > 1 && (
+            <View style={[styles.pad, { marginTop: space.md }]}>
+              <Button title={`Qolgan ${open.length} tasini ertaga oʻtkazish`} kind="secondary" onPress={() => moveTasks(open.map((t) => t.id), tomorrow)} />
+            </View>
+          )}
+        </>
+      )}
+
       {habits.length > 0 && (
         <>
           <SectionTitle>Bugungi odatlar</SectionTitle>
@@ -96,33 +123,6 @@ export function TodayClose({
               );
             })}
           </Group>
-        </>
-      )}
-
-      {tasks.length > 0 && (
-        <>
-          <SectionTitle right={<Txt variant="caption" tone="faint" numeric>{done.length}/{tasks.length}</Txt>}>
-            Bugungi ishlar
-          </SectionTitle>
-          <Group>
-            {[...open, ...done].map((t, i) => (
-              <View key={t.id}>
-                {i > 0 && <Divider inset={space.xxxl} />}
-                <TaskRow
-                  task={t}
-                  meta={t.block ? BLOCK_LABEL[t.block] : undefined}
-                  onToggle={() => setTaskDone(t.id, t.status !== 'done')}
-                  onLongPress={() => taskActions(t, today)}
-                  right={t.status === 'open' ? <MiniAction label="Ertaga" onPress={() => moveTasks([t.id], tomorrow)} /> : undefined}
-                />
-              </View>
-            ))}
-          </Group>
-          {open.length > 1 && (
-            <View style={[styles.pad, { marginTop: space.md }]}>
-              <Button title={`Qolgan ${open.length} tasini ertaga oʻtkazish`} kind="secondary" onPress={() => moveTasks(open.map((t) => t.id), tomorrow)} />
-            </View>
-          )}
         </>
       )}
     </>
@@ -211,9 +211,7 @@ export function TomorrowPlan({
                 {i > 0 && <Divider inset={space.xxxl} />}
                 <TaskRow
                   task={t}
-                  meta={[t.block ? BLOCK_LABEL[t.block] : null, t.movedCount ? `${t.movedCount} marta koʻchirilgan` : null]
-                    .filter(Boolean)
-                    .join(' · ') || undefined}
+                  meta={taskMeta(t, { block: true }) ?? 'Bosing — vaqt yoki kun boʻlagini belgilang'}
                   onToggle={() => editTask(t)}
                   onLongPress={() => taskActions(t, tomorrow)}
                   right={
