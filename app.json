@@ -1,0 +1,63 @@
+{
+  "expo": {
+    "name": "Kun tartibim",
+    "slug": "kuntartibim",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "kuntartibim",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0A0A0A",
+    "android": {
+      "package": "uz.kuntartibim.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#0A0A0A",
+        "foregroundImage": "./assets/images/adaptive-foreground.png",
+        "monochromeImage": "./assets/images/adaptive-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.SCHEDULE_EXACT_ALARM",
+        "android.permission.USE_EXACT_ALARM",
+        "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.VIBRATE"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0A0A0A",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 96
+        }
+      ],
+      "expo-sqlite",
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#E8A33D"
+        }
+      ]
+    ],
+    "owner": "yokubjanovich",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "2a1c5d1b-ce60-4b29-8092-0a0bcdd632ae"
+      }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/2a1c5d1b-ce60-4b29-8092-0a0bcdd632ae"
+    },
+    "ios": {}
+  }
+}

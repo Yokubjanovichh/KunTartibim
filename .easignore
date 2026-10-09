@@ -1,0 +1,37 @@
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native (EAS generates these in the cloud)
+/android
+/ios
+.kotlin/
+*.jks
+*.keystore
+*.p8
+*.p12
+*.key
+*.pem
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+
+# local env files
+.env*.local
+
+# typescript
+*.tsbuildinfo
+
+.DS_Store
+
+# EAS ga yuklanmasin
+/tests
+/scripts
