@@ -1,10 +1,21 @@
-# Kun tartibim
+# Namozim (+ «Kun tartibim» in `reja/`)
 
-Personal Android app for one user (Huawei nova 11, EMUI 14.2, no Google services):
-namoz times for Toʻraqoʻrgʻon with reminders, "oʻqidim" confirmation, automatic qazo
-list, and — in later phases — yearly/monthly/weekly/daily plans. UI language: Uzbek
-(Latin, with ʻ U+02BB in oʻ/gʻ). The phone's system UI is in Russian, so Huawei
-settings paths are written in Russian ("Настройки → Батарея → Запуск приложений").
+Two personal Android apps for one user (Huawei nova 11, EMUI 14.2, no Google services).
+Until 2026-10-10 they were one app; the user asked to split it — one purpose per app,
+like MoliyamApp ("har bittasi alohida app … ishlatish ham tushunish ham oson").
+
+- **This folder = Namozim** — namoz times for Toʻraqoʻrgʻon with reminders, "oʻqidim"
+  confirmation, automatic qazo list, Bomdod alarm. It is the ORIGINAL install
+  (package `uz.kuntartibim.app`, EAS project `kuntartibim`), so namoz data, Huawei
+  permissions and the alarm stayed in place; only the launcher name changed (1.2.0).
+- **`reja/` = Kun tartibim** — daily planning (tasks under prayer-time blocks, evening
+  plan, habits; week/month/year goals next). A fully separate Expo project: own
+  package.json/node_modules, package `uz.kuntartibim.reja`, EAS project
+  `kuntartibim-reja`. Read `reja/AGENTS.md` before working there. Don't add planning
+  features back here.
+
+UI language: Uzbek (Latin, with ʻ U+02BB in oʻ/gʻ). The phone's system UI is in Russian,
+so Huawei settings paths are written in Russian ("Настройки → Батарея → Запуск приложений").
 
 Expo SDK 56 — same stack as `../MoliyamApp/moliyam`, which is proven on this phone.
 Read the versioned docs at https://docs.expo.dev/versions/v56.0.0/ before using an API.
@@ -13,7 +24,7 @@ Read the versioned docs at https://docs.expo.dev/versions/v56.0.0/ before using 
 
 ```
 npm test                 # logic + DB tests (tsx), TZ forced to Asia/Tashkent;
-                         # DB tests run the real tracker.ts/plan.ts on node:sqlite
+                         # DB tests run the real tracker.ts/planner-export.ts on node:sqlite
                          # via tests/shims (expo-sqlite is redirected there)
 npm run typecheck        # app + tests (tests have their own tsconfig with node types)
 npm run export:android   # Metro bundle check, --max-workers 1 (low-RAM safe)
@@ -21,6 +32,8 @@ npm run icons            # regenerate assets/images/* (pure Node PNG renderer)
 ```
 
 `npx expo …` fails on this Windows machine — use `./node_modules/.bin/expo …`.
+The same commands exist in `reja/` (run them from there). `metro.config.js` and
+`tsconfig.json` here exclude `reja/` — otherwise Metro/tsc crawl its node_modules.
 
 ## Shipping changes WITHOUT reinstalling (user requirement)
 
@@ -38,6 +51,10 @@ npm run icons            # regenerate assets/images/* (pure Node PNG renderer)
   The new APK installs over the old one (same EAS keystore) — data is kept.
 - The first APK already contains native modules planned for phases 2–4 (file system,
   sharing, document picker, svg, intent launcher, battery) so those phases can ship OTA.
+  `reja/` has the same dependency set for the same reason.
+- **`.easignore` at the GIT ROOT applies to builds of BOTH apps** (eas-cli archives
+  `git rev-parse --show-toplevel`). Never add `/reja` to it — the planner build would
+  upload without its own sources. Anchored paths like `/reja/tests` are fine.
 
 ## Architecture
 
@@ -61,22 +78,16 @@ npm run icons            # regenerate assets/images/* (pure Node PNG renderer)
   `expo-router/entry` — route files are not loaded in headless mode.
   Both the task and the foreground listener may receive the same press →
   `claimResponse()` dedupes via `handled_responses`.
-- Phase 2 (planning): `blocks.ts` (tasks are placed relative to prayers — "Asrdan
-  keyin" — not clock times), `habits.ts` (pure: streaks, week progress, planning
-  streak), `plan.ts` (DB: tasks, habits, habit_log, day_plans). Tasks/habits use the
-  same *prayer day* as namoz — a late sleeper's 01:00 still belongs to "today".
-  UI: `ui/DayPlan.tsx` (Today screen sections), `ui/EveningPlan.tsx` (Tahlil: close the
-  day → plan tomorrow → "Reja tayyor ✓"). Max 3 priority (★) tasks per day; their
-  titles appear in that day's Bomdod notification. Habit links to goals come in phase 3
-  and must stay OPTIONAL (user requirement).
-- **Daily planning comes first, habits are secondary** (user, 2026-10-09: "odatlardan
-  ko'ra kunlik ishlarni rejalashtirish muhimroq"). The Today screen is one "Kun tartibi":
-  each prayer row with its block's tasks nested under it (`BLOCK_AFTER`); habits render
-  only if the user created some. Tasks may have an exact `time` (+ optional
-  `remind_before`) — the block is then derived from the time (`blockForTime`), times
-  before Bomdod belong to the prayer day's night (`momentOnPrayerDay`). Timed tasks get
-  their own notification (`task:<id>`, channel `ishlar`, [Bajarildi ✓] handled by the
-  background task); prayer start notifications list that block's tasks ("Keyin: …").
+- **Planning moved to `reja/` (2026-10-10).** The `tasks`, `habits`, `habit_log`,
+  `day_plans`, `day_notes` tables still exist here (migrations are append-only) but the
+  UI no longer reads them. `planner-export.ts` sends their rows to Kun tartibim via a
+  deep link `kunreja://import?d=<encodeURIComponent(JSON)>` (no file picking; the
+  planner shows a summary, asks to confirm and dedupes repeats). The payload format must
+  match `reja/src/lib/transfer.ts` — `tests/db.test.ts` pins the field names. The Today
+  screen shows a one-time "Koʻchirish" notice; Settings keeps a re-send row.
+- The evening notification is now only "Uxlashdan oldin" (Xufton/Vitr unmarked, default
+  22:30 — the planner's "Kun yakuni" is at 22:00). Prayer notifications no longer list
+  tasks; the old `ishlar` channel and `task` category are deleted on start.
 - **Bomdod alarm — the only custom native code** (`modules/bomdod-alarm`, local Expo
   module, autolinked from `./modules`, Kotlin, added in app version 1.1.0). JS computes
   the next 14 days of alarm times (`alarm-plan.ts`, adhan stays in JS) and hands them to
@@ -124,7 +135,10 @@ npm run icons            # regenerate assets/images/* (pure Node PNG renderer)
   phone. The repo uses the GitHub noreply address as commit email (local config) — the
   user's real email must not appear in this public history. Never commit secrets.
   (The first APK build and OTA 5e04aae9 were made before git, with `EAS_NO_VCS=1`.)
-- `.easignore` keeps tests/scripts out of build uploads.
+- `.easignore` keeps tests/scripts out of build uploads (see the git-root note above).
+- Shell heredocs in this environment collapse a doubled backslash into a single one —
+  write files that contain backslashes (regexes, JSX `{'\n'}`) with an editor tool,
+  not `cat <<EOF` or inline Python.
 - **Foreground service contract** (`AlarmService`): a service started with
   `startForegroundService()` must call `startForeground()` — even `stopSelf()` before it
   crashes the app. So `startForeground` is the FIRST thing in `onStartCommand`, the session

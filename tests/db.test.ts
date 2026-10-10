@@ -1,5 +1,5 @@
 /**
- * Baza qatlami — ilovaning haqiqiy tracker.ts / plan.ts modullari, faqat
+ * Baza qatlami — ilovaning haqiqiy tracker.ts / planner-export.ts modullari, faqat
  * expo-sqlite oʻrnida Node SQLite (tests/shims). SQL xatolari telefonga yetmasdan
  * shu yerda ushlanadi.
  */
@@ -7,28 +7,7 @@ import assert from 'node:assert/strict';
 
 import { getDb, getSetting, setSetting } from '../src/db/client';
 import { SCHEMA_VERSION } from '../src/db/migrations';
-import { markKey } from '../src/lib/habits';
-import {
-  addHabit,
-  addTask,
-  archiveHabit,
-  backlogTasks,
-  blockTaskTitles,
-  habitMarks,
-  isTaskOpen,
-  listHabits,
-  markPlanned,
-  MAX_PRIORITY,
-  moveTasks,
-  overdueTasks,
-  plannedDays,
-  priorityTitlesByDay,
-  setHabitMark,
-  setTaskDone,
-  taskReminders,
-  tasksForDay,
-  updateTask,
-} from '../src/lib/plan';
+import { buildPlannerPayload, markPlannerMoved, plannerDataCount, plannerImportUrl, plannerMovedAt } from '../src/lib/planner-export';
 import {
   addOldQazo,
   deleteEntry,
@@ -44,7 +23,7 @@ import { test } from './harness';
 function reset() {
   getDb().execSync(`
     DELETE FROM prayer_log; DELETE FROM qazo_entries; DELETE FROM tasks;
-    DELETE FROM habit_log; DELETE FROM habits; DELETE FROM day_plans; DELETE FROM settings;
+    DELETE FROM habit_log; DELETE FROM habits; DELETE FROM day_plans; DELETE FROM day_notes; DELETE FROM settings;
   `);
   // Ilova 9-oktabr soat 11:00 da oʻrnatilgan
   setSetting('tracking_start', new Date(2026, 9, 9, 11, 0).toISOString());
@@ -101,94 +80,65 @@ test('Qazo: ayirish qoldiqdan oshmaydi; "1 kunlik" faqat qoldigʻi borlardan', (
   assert.deepEqual([b.bomdod, b.peshin, b.total], [1, 0, 1]);
 });
 
-test('Vazifalar: asosiylar 3 tadan oshmaydi; tartib — asosiy, ochiq, bajarilgan', () => {
+/* ── «Kun tartibim»ga koʻchirish ─────────────────────────────────────────── */
+
+function seedPlanning() {
+  const db = getDb();
+  db.runSync(
+    `INSERT INTO tasks (title, day, block, time, remind_before, priority, status, moved_count, created_at)
+     VALUES ('Leetcode 2 masala', '2026-10-10', 'afternoon', '16:30', 15, 1, 'open', 1, '2026-10-09T17:00:00.000Z');`,
+  );
+  db.runSync(`INSERT INTO tasks (title, day, status, done_at, created_at) VALUES ('Zal', '2026-10-09', 'done', '2026-10-09T15:00:00.000Z', '2026-10-09T10:00:00.000Z');`);
+  const habit = db.runSync(`INSERT INTO habits (title, kind, target_per_week, created_at) VALUES ('Kitob oʻqish', 'do', 7, '2026-10-09T09:00:00.000Z');`);
+  db.runSync('INSERT INTO habit_log (habit_id, day, done, at) VALUES (?, ?, 1, ?);', [habit.lastInsertRowId, '2026-10-09', '2026-10-09T18:00:00.000Z']);
+  db.runSync(`INSERT INTO day_plans (day, planned_at) VALUES ('2026-10-10', '2026-10-09T19:00:00.000Z');`);
+  db.runSync(`INSERT INTO day_notes (day, text, updated_at) VALUES ('2026-10-09', 'Birinchi kun', '2026-10-09T19:00:00.000Z');`);
+  setSetting('adjustments', JSON.stringify({ bomdod: 0, quyosh: 0, peshin: 4, asr: 0, shom: 0, xufton: -4 }));
+  setSetting('bedtime', '23:30');
+  setSetting('bedtime_enabled', '1');
+}
+
+test('Koʻchirish: ishlar, odatlar, belgilar, rejalar, xulosalar va sozlamalar — «Kun tartibim» kutgan shaklda', () => {
   reset();
-  for (let i = 1; i <= 4; i++) addTask({ title: `Ish ${i}`, day: '2026-10-10', priority: true });
-  setTaskDone(addTask({ title: 'Oddiy', day: '2026-10-10' }), true);
-  const list = tasksForDay('2026-10-10');
-  assert.equal(list.filter((t) => t.priority === 1).length, MAX_PRIORITY);
-  assert.equal(list[list.length - 1].title, 'Oddiy');
+  assert.equal(plannerDataCount(), 0);
+  seedPlanning();
+  assert.equal(plannerDataCount(), 5, '2 ish + 1 odat + 1 reja + 1 xulosa');
+
+  const p = buildPlannerPayload(new Date('2026-10-10T16:00:00.000Z'));
+  assert.equal(p.v, 1);
+  assert.equal(p.exportedAt, '2026-10-10T16:00:00.000Z');
+  // Maydon nomlari reja/src/lib/transfer.ts (TransferTask) bilan bir xil boʻlishi shart
+  assert.deepEqual(Object.keys(p.tasks[0]).sort(), [
+    'block', 'createdAt', 'day', 'doneAt', 'movedCount', 'priority', 'remindBefore', 'status', 'time', 'title',
+  ]);
+  assert.deepEqual(
+    [p.tasks[0].title, p.tasks[0].block, p.tasks[0].time, p.tasks[0].remindBefore, p.tasks[0].priority, p.tasks[0].movedCount],
+    ['Leetcode 2 masala', 'afternoon', '16:30', 15, 1, 1],
+  );
+  assert.equal(p.tasks[1].status, 'done');
+  assert.deepEqual(Object.keys(p.habits[0]).sort(), ['archived', 'block', 'createdAt', 'id', 'kind', 'sortOrder', 'targetPerWeek', 'title']);
+  assert.equal(p.habitLog[0].habitId, p.habits[0].id);
+  assert.deepEqual(p.dayPlans, [{ day: '2026-10-10', plannedAt: '2026-10-09T19:00:00.000Z' }]);
+  assert.equal(p.notes[0].text, 'Birinchi kun');
+  assert.equal(p.settings.adjustments?.peshin, 4);
+  assert.equal(p.settings.bedtime, '23:30');
+  assert.equal(p.settings.bedtimeEnabled, true);
+  assert.equal(p.settings.reviewTime, undefined, 'oʻzgartirilmagan sozlama yuborilmaydi');
 });
 
-test('Vazifalar: koʻchirish sanaladi; kechagi ochiq ishlar "qolib ketgan"', () => {
+test('Koʻchirish havolasi: kunreja://import, maʼlumot toʻliq qaytib oʻqiladi (oʻzbekcha harflar ham)', () => {
   reset();
-  const id = addTask({ title: 'Leetcode 2 masala', day: '2026-10-08' });
-  setTaskDone(addTask({ title: 'Bajarilgan', day: '2026-10-08' }), true);
-  assert.deepEqual(overdueTasks('2026-10-09').map((t) => t.title), ['Leetcode 2 masala']);
-  moveTasks([id], '2026-10-09');
-  moveTasks([id], '2026-10-10');
-  assert.equal(tasksForDay('2026-10-10')[0].movedCount, 2);
-  assert.equal(overdueTasks('2026-10-09').length, 0);
+  seedPlanning();
+  const url = plannerImportUrl();
+  assert.ok(url.startsWith('kunreja://import?d='));
+  const back = JSON.parse(decodeURIComponent(url.slice('kunreja://import?d='.length)));
+  assert.equal(back.habits[0].title, 'Kitob oʻqish');
+  assert.ok(url.length < 100_000, `${url.length} belgi`);
 });
 
-test('Vazifalar: "keyinroq" roʻyxati asosiy boʻlmaydi, undan olish koʻchirish emas', () => {
+test('Koʻchirildi belgisi: Bugun ekranidagi eslatma yashiriladi', () => {
   reset();
-  const id = addTask({ title: 'CV yangilash', day: null, priority: true });
-  assert.equal(backlogTasks()[0].priority, 0);
-  moveTasks([id], '2026-10-10');
-  assert.equal(backlogTasks().length, 0);
-  assert.equal(tasksForDay('2026-10-10')[0].movedCount, 0);
-});
-
-test('Vazifalar: Bomdod eslatmasi uchun — faqat ochiq asosiylar', () => {
-  reset();
-  addTask({ title: 'CV', day: '2026-10-10', priority: true });
-  addTask({ title: 'Zal', day: '2026-10-10', priority: true });
-  setTaskDone(addTask({ title: 'Eski', day: '2026-10-10', priority: true }), true);
-  addTask({ title: 'Oddiy', day: '2026-10-10' });
-  assert.deepEqual(priorityTitlesByDay('2026-10-09', '2026-10-11').get('2026-10-10'), ['CV', 'Zal']);
-});
-
-test('Vazifa tahriri: kun oldinga — koʻchirish +1; toʻla kunda asosiy boʻlmaydi', () => {
-  reset();
-  for (let i = 1; i <= 3; i++) addTask({ title: `A${i}`, day: '2026-10-11', priority: true });
-  const id = addTask({ title: 'B', day: '2026-10-10', priority: true });
-  updateTask(id, { day: '2026-10-11' });
-  const b = tasksForDay('2026-10-11').find((t) => t.title === 'B')!;
-  assert.equal(b.movedCount, 1);
-  assert.equal(b.priority, 0);
-});
-
-test('Odatlar: belgilar, olib tashlash, arxiv', () => {
-  reset();
-  const kitob = addHabit({ title: 'Kitob oʻqish', kind: 'do', targetPerWeek: 7, block: null });
-  const zal = addHabit({ title: 'Zal', kind: 'do', targetPerWeek: 3, block: 'afternoon' });
-  setHabitMark(kitob, '2026-10-09', true);
-  setHabitMark(kitob, '2026-10-10', false);
-  setHabitMark(zal, '2026-10-10', true);
-  setHabitMark(zal, '2026-10-10', null);
-  const m = habitMarks('2026-10-01', '2026-10-31');
-  assert.equal(m.get(markKey(kitob, '2026-10-09')), true);
-  assert.equal(m.get(markKey(kitob, '2026-10-10')), false);
-  assert.equal(m.has(markKey(zal, '2026-10-10')), false);
-  assert.equal(listHabits().find((h) => h.id === zal)!.block, 'afternoon');
-  archiveHabit(zal);
-  assert.deepEqual(listHabits().map((h) => h.title), ['Kitob oʻqish']);
-  assert.equal(listHabits(true).length, 2);
-});
-
-test('Kechki reja: qayta bosish xato bermaydi', () => {
-  reset();
-  markPlanned('2026-10-10');
-  markPlanned('2026-10-10');
-  assert.deepEqual([...plannedDays('2026-10-01', '2026-10-31')], ['2026-10-10']);
-});
-
-test('Vaqtli ish: eslatmalar roʻyxati, blok nomlari, "keyinroq"ga olinsa vaqt oʻchadi', () => {
-  reset();
-  const a = addTask({ title: 'Interview', day: '2026-10-10', block: 'noon', time: '15:00', remindBefore: 60 });
-  addTask({ title: 'Eslatmasiz', day: '2026-10-10', block: 'noon', time: '13:00', remindBefore: null });
-  addTask({ title: 'Notoʻgʻri vaqt', day: '2026-10-10', time: '25:99', remindBefore: 0 });
-  addTask({ title: 'Sanasiz', day: null, time: '10:00', remindBefore: 0 });
-  assert.deepEqual(taskReminders('2026-10-09', '2026-10-11').map((t) => [t.title, t.time, t.remindBefore]), [['Interview', '15:00', 60]]);
-  assert.equal(tasksForDay('2026-10-10').find((t) => t.title === 'Notoʻgʻri vaqt')!.time, null);
-  assert.equal(backlogTasks()[0].time, null);
-  // Blok ichida vaqt boʻyicha: 13:00, keyin 15:00
-  assert.deepEqual(blockTaskTitles('2026-10-10', '2026-10-10').get('2026-10-10:noon'), ['Eslatmasiz (13:00)', 'Interview (15:00)']);
-  moveTasks([a], null);
-  const back = backlogTasks().find((t) => t.title === 'Interview')!;
-  assert.equal(back.time, null);
-  assert.equal(back.remindBefore, null);
-  assert.ok(!isTaskOpen(999));
-  assert.ok(isTaskOpen(a));
+  assert.equal(plannerMovedAt(), null);
+  markPlannerMoved(new Date('2026-10-10T16:05:00.000Z'));
+  assert.equal(plannerMovedAt()?.toISOString(), '2026-10-10T16:05:00.000Z');
 });

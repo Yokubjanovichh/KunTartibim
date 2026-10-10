@@ -4,7 +4,7 @@
  *   OverdueNotice  — oldingi kunlardan qolgan ochiq ishlar → bir bosishda bugunga
  *   AnytimeSection — bloksiz va vaqtsiz ishlar ("Kun davomida")
  *   HabitsSection  — odatlar (faqat foydalanuvchi qoʻshgan boʻlsa koʻrinadi)
- * Blokli ishlar kun tartibida — oʻz namozi ostida chiziladi (app/(tabs)/index.tsx).
+ * Boʻlakli ishlar kun tartibida — oʻz namoz vaqti ostida chiziladi (app/(tabs)/index.tsx).
  */
 
 import { router } from 'expo-router';
@@ -25,7 +25,6 @@ import {
   type Task,
   tasksForDay,
 } from '../lib/plan';
-import type { PrayerId } from '../lib/prayers';
 import { addDays, formatDayShort, weekStart } from '../lib/time';
 import { space } from '../theme/tokens';
 import { Divider, Group, Notice, SectionTitle, Spacer, Tap, Txt } from './index';
@@ -33,15 +32,6 @@ import { HabitRow, TaskRow } from './plan';
 
 /** Seriya hisobi uchun qancha kun orqaga qaraladi */
 const STREAK_LOOKBACK = 120;
-
-/** Kun tartibida qaysi namozdan keyin qaysi blok ishlari turadi */
-export const BLOCK_AFTER: Partial<Record<PrayerId, BlockId>> = {
-  bomdod: 'morning',
-  peshin: 'noon',
-  asr: 'afternoon',
-  shom: 'evening',
-  vitr: 'night', // Xufton va Vitrdan keyin
-};
 
 export function useDayPlan(day: string) {
   const version = useDataVersion();
@@ -95,13 +85,13 @@ export function taskMeta(task: Task, opts: { block?: boolean } = {}): string | u
 
 /* ── Asosiy ishlar ────────────────────────────────────────────────────────── */
 
-export function TopTasks({ day, tasks }: { day: string; tasks: Task[] }) {
+export function TopTasks({ day, tasks, title = 'Bugungi asosiy' }: { day: string; tasks: Task[]; title?: string }) {
   const top = tasks.filter((t) => t.priority === 1);
   if (!top.length) return null;
   const done = top.filter((t) => t.status === 'done').length;
   return (
     <>
-      <SectionTitle right={<Txt variant="caption" tone="faint" numeric>{done}/{top.length}</Txt>}>Bugungi asosiy</SectionTitle>
+      <SectionTitle right={<Txt variant="caption" tone="faint" numeric>{done}/{top.length}</Txt>}>{title}</SectionTitle>
       <Group>
         {top.map((t, i) => (
           <View key={t.id}>
@@ -145,16 +135,18 @@ export function OverdueNotice({ day }: { day: string }) {
 
 /* ── Kun davomida (bloksiz ishlar) ────────────────────────────────────────── */
 
-export function AnytimeSection({ day, tasks, isCurrent }: { day: string; tasks: Task[]; isCurrent: boolean }) {
+export function AnytimeSection({ day, tasks, tense }: { day: string; tasks: Task[]; tense: 'past' | 'today' | 'future' }) {
   // Bloksiz asosiy ishlar tepadagi "Bugungi asosiy" da — ikki marta koʻrsatmaymiz
   const items = tasks.filter((t) => t.block === null && t.priority !== 1);
   const scheduled = tasks.some((t) => t.block !== null);
   if (!items.length) {
     return tasks.length === 0 ? (
       <Txt variant="caption" tone="faint" style={styles.empty}>
-        {isCurrent
+        {tense === 'today'
           ? 'Bugunga ish rejalanmagan. «+ Ish qoʻshish» — yoki kechqurun «Kun yakuni»da ertangi kunni rejalang.'
-          : 'Bu kunga ish rejalanmagan edi.'}
+          : tense === 'future'
+            ? 'Bu kunga hali ish rejalanmagan. Namoz vaqtini bosing — oʻsha boʻlakka ish qoʻshiladi.'
+            : 'Bu kunga ish rejalanmagan edi.'}
       </Txt>
     ) : null;
   }

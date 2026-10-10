@@ -15,7 +15,6 @@ import { Platform } from 'react-native';
 
 import { alarmSupported, confirmAwake, setAlarmSchedule } from './alarm';
 import { alarmConfigFrom, buildAlarmPlan } from './alarm-plan';
-import { blockTaskTitles, isTaskOpen, plannedDays, priorityTitlesByDay, taskReminders } from './plan';
 import { prayerKey } from './prayers';
 import { buildPlan, type CategoryId, type NotificationData, type PlannedNotification, readData } from './schedule';
 import { type AppSettings, loadSettings } from './settings';
@@ -24,7 +23,8 @@ import { addDays } from './time';
 
 export const CHANNEL_PRAYER = 'namoz-vaqtlari';
 export const CHANNEL_GENERAL = 'kun-yakuni';
-export const CHANNEL_TASKS = 'ishlar';
+/** Ilova boʻlinishidan oldin ishlar shu kanalda edi — endi «Kun tartibim»da */
+const OLD_CHANNEL_TASKS = 'ishlar';
 
 /** 10 kun ≈ 120 ta eslatma. Ilova 10 kun ochilmasa ham namoz eslatmalari kelaveradi. */
 export const HORIZON_DAYS = 10;
@@ -57,21 +57,16 @@ export async function configureNotifications(): Promise<void> {
   });
 
   await Notifications.setNotificationChannelAsync(CHANNEL_GENERAL, {
-    name: 'Kun yakuni, uyqu va qazo',
-    description: 'Kun yakuni va ertangi reja, yotish vaqti, qazo eslatmasi',
+    name: 'Kechki tekshiruv va qazo',
+    description: 'Uxlashdan oldin Xufton/Vitr, qazo eslatmasi',
     importance: Notifications.AndroidImportance.HIGH,
     sound: 'default',
     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
   });
 
-  await Notifications.setNotificationChannelAsync(CHANNEL_TASKS, {
-    name: 'Ishlar',
-    description: 'Aniq vaqtli ishlar eslatmasi',
-    importance: Notifications.AndroidImportance.HIGH,
-    sound: 'default',
-    vibrationPattern: [0, 200, 150, 200],
-    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-  });
+  // Ishlar endi «Kun tartibim»da — eski kanal va tugmalar telefondan olib tashlanadi
+  await Notifications.deleteNotificationChannelAsync(OLD_CHANNEL_TASKS).catch(() => {});
+  await Notifications.deleteNotificationCategoryAsync('task').catch(() => {});
 
   await registerCategories();
 }
@@ -98,10 +93,6 @@ async function registerCategories(): Promise<void> {
   await Notifications.setNotificationCategoryAsync('qazo', [
     { identifier: 'makeup_day', buttonTitle: 'Bugungi qazoni oʻqidim ✓', options: quiet },
   ]);
-  await Notifications.setNotificationCategoryAsync('task', [
-    { identifier: 'task_done', buttonTitle: 'Bajarildi ✓', options: quiet },
-    { identifier: 'snooze', buttonTitle: '15 daqiqadan keyin', options: quiet },
-  ]);
 }
 
 export async function permissionStatus(): Promise<{ granted: boolean; canAsk: boolean }> {
@@ -119,7 +110,6 @@ export async function requestPermission(): Promise<boolean> {
 /* ── Rejalashtirish ───────────────────────────────────────────────────────── */
 
 function channelFor(category: CategoryId, kind: NotificationData['kind']): string {
-  if (kind === 'task') return CHANNEL_TASKS;
   return kind === 'start' || kind === 'warn' || kind === 'snooze' || kind === 'test' || category === 'isha'
     ? CHANNEL_PRAYER
     : CHANNEL_GENERAL;
@@ -202,24 +192,12 @@ async function syncOnce(now: Date): Promise<SyncResult> {
       records,
       settings,
       qazoTotal: qazoBalances().total,
-      topTasks: priorityTitlesByDay(firstDay, addDays(firstDay, HORIZON_DAYS)),
-      plannedDays: plannedDays(firstDay, addDays(firstDay, HORIZON_DAYS + 1)),
-      blockTasks: blockTaskTitles(firstDay, addDays(firstDay, HORIZON_DAYS)),
-      taskReminders: taskReminders(firstDay, addDays(firstDay, HORIZON_DAYS)).map((t) => ({
-        id: t.id,
-        title: t.title,
-        day: t.day!,
-        time: t.time!,
-        remindBefore: t.remindBefore!,
-      })),
     });
 
     const want = new Map(plan.map((n) => [n.id, n]));
-    // Hal boʻlganmi: ish bajarilgan yoki namozlar belgilangan — eslatmasi kerak emas
+    // Hal boʻlganmi: namozlar belgilangan — eslatmasi kerak emas
     const allMarked = (d: NotificationData) =>
-      d.taskId !== undefined
-        ? !isTaskOpen(d.taskId)
-        : !!d.day && !!d.prayers?.length && d.prayers.every((p) => records.has(prayerKey(d.day!, p)));
+      !!d.day && !!d.prayers?.length && d.prayers.every((p) => records.has(prayerKey(d.day!, p)));
 
     let changed = 0;
     const existing = await Notifications.getAllScheduledNotificationsAsync();
@@ -227,7 +205,8 @@ async function syncOnce(now: Date): Promise<SyncResult> {
       const id = req.identifier;
       const data = readData(req.content);
       if (id.startsWith('snooze:') || id === 'test') {
-        if (allMarked(data)) await Notifications.cancelScheduledNotificationAsync(id);
+        // Boʻlinishdan oldin surilgan ish eslatmasi — endi «Kun tartibim»ning ishi
+        if (allMarked(data) || id.startsWith('snooze:task:')) await Notifications.cancelScheduledNotificationAsync(id);
         continue;
       }
       const target = want.get(id);
@@ -282,7 +261,7 @@ function syncAlarm(settings: AppSettings, now: Date): void {
 export async function scheduleSnooze(content: { title?: string | null; body?: string | null; categoryIdentifier?: string | null }, data: NotificationData, minutes = 15): Promise<void> {
   const prayer = data.prayers?.[0] ?? 'x';
   await Notifications.scheduleNotificationAsync({
-    identifier: data.taskId !== undefined ? `snooze:task:${data.taskId}` : `snooze:${data.day ?? 'x'}:${prayer}`,
+    identifier: `snooze:${data.day ?? 'x'}:${prayer}`,
     content: {
       title: content.title ?? 'Eslatma',
       body: content.body ?? '',
@@ -294,7 +273,7 @@ export async function scheduleSnooze(content: { title?: string | null; body?: st
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
       seconds: minutes * 60,
-      channelId: data.taskId !== undefined ? CHANNEL_TASKS : CHANNEL_PRAYER,
+      channelId: CHANNEL_PRAYER,
     },
   });
 }

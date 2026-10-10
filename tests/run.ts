@@ -10,7 +10,6 @@ require('./shims/register.cjs');
 require('./prayer-times.test');
 require('./status.test');
 require('./schedule.test');
-require('./habits.test');
 require('./db.test');
 require('./alarm.test');
 

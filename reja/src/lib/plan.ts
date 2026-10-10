@@ -192,44 +192,14 @@ export function deleteTask(id: number): void {
   emitChange();
 }
 
-/** Kun → ochiq asosiy ishlar nomlari (Bomdod eslatmasi uchun) */
-export function priorityTitlesByDay(fromDay: string, toDay: string): Map<string, string[]> {
-  const rows = getDb().getAllSync<{ day: string; title: string }>(
-    `SELECT day, title FROM tasks WHERE day BETWEEN ? AND ? AND priority = 1 AND status = 'open' ORDER BY id;`,
-    [fromDay, toDay],
-  );
-  const map = new Map<string, string[]>();
-  for (const r of rows) map.set(r.day, [...(map.get(r.day) ?? []), r.title]);
-  return map;
-}
-
-/** Eslatmasi bor ochiq vaqtli ishlar (bildirishnoma rejasi uchun) */
-export function taskReminders(fromDay: string, toDay: string): Task[] {
+/** Ochiq ishlar (bildirishnoma rejasi uchun): ertalabki reja, boʻlak va vaqt eslatmalari */
+export function openTasksInRange(fromDay: string, toDay: string): Task[] {
   return getDb()
-    .getAllSync<Task>(
-      `SELECT ${TASK_COLUMNS} FROM tasks
-        WHERE status = 'open' AND day BETWEEN ? AND ? AND time IS NOT NULL AND remind_before IS NOT NULL;`,
-      [fromDay, toDay],
-    )
-    .map(normalize)
-    .filter((t) => t.time !== null && t.remindBefore !== null);
-}
-
-/** `${day}:${block}` → shu blokdagi ochiq ishlar (namoz eslatmasida "Keyin: …") */
-export function blockTaskTitles(fromDay: string, toDay: string): Map<string, string[]> {
-  const map = new Map<string, string[]>();
-  for (const t of getDb()
-    .getAllSync<Task>(
-      `SELECT ${TASK_COLUMNS} FROM tasks WHERE status = 'open' AND day BETWEEN ? AND ? AND block IS NOT NULL
-        ORDER BY time IS NULL, time, id;`,
-      [fromDay, toDay],
-    )
-    .map(normalize)) {
-    if (!t.day || !t.block) continue;
-    const key = `${t.day}:${t.block}`;
-    map.set(key, [...(map.get(key) ?? []), t.time ? `${t.title} (${t.time})` : t.title]);
-  }
-  return map;
+    .getAllSync<Task>(`SELECT ${TASK_COLUMNS} FROM tasks WHERE status = 'open' AND day BETWEEN ? AND ? ORDER BY day, id;`, [
+      fromDay,
+      toDay,
+    ])
+    .map(normalize);
 }
 
 export function isTaskOpen(id: number): boolean {

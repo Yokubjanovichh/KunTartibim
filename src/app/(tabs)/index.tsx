@@ -9,24 +9,13 @@ import { useUpdateState } from '../../hooks/useUpdate';
 import type { PrayerWindow } from '../../lib/prayer-times';
 import { PRAYER_NAME, PRAYERS, type PrayerId } from '../../lib/prayers';
 import { dayStatuses, nowInfo, type PrayerStatus } from '../../lib/status';
+import { plannerDataCount, plannerMovedAt } from '../../lib/planner-export';
 import { addDays, formatDayLong, formatDuration, formatDurationShort, hhmm } from '../../lib/time';
-import { setTaskDone } from '../../lib/plan';
 import { calendarFor, getRecords, markPrayer, reconcile } from '../../lib/tracker';
 import { applyUpdate } from '../../lib/updates';
 import { color, space } from '../../theme/tokens';
 import { Badge, Button, Divider, Group, Notice, Progress, Row, ScreenScroll, SectionTitle, Spacer, Tap, Txt } from '../../ui';
-import {
-  AnytimeSection,
-  BLOCK_AFTER,
-  blockTasks,
-  HabitsSection,
-  OverdueNotice,
-  taskActions,
-  taskMeta,
-  TopTasks,
-  useDayPlan,
-} from '../../ui/DayPlan';
-import { TaskRow } from '../../ui/plan';
+import { moveToPlanner } from '../../ui/plannerMove';
 import { pressPrayer } from '../../ui/prayerActions';
 
 /** Necha kun orqaga koʻrish mumkin — tuzatishlar uchun yetarli */
@@ -62,7 +51,9 @@ export default function TodayScreen() {
   const qazoCount = PRAYERS.filter((p) => statuses[p] === 'qazo' || statuses[p] === 'missed').length;
 
   const onRowPress = (p: PrayerId) => pressPrayer(day, p, statuses[p], wins[p], now);
-  const plan = useDayPlan(day);
+  // Boʻlinishdan oldingi ishlar — «Kun tartibim»ga hali yuborilmagan boʻlsa
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const toMove = useMemo(() => (plannerMovedAt() ? 0 : plannerDataCount()), [version]);
 
   const minDay = addDays(currentDay, -MAX_BACK_DAYS);
 
@@ -95,9 +86,6 @@ export default function TodayScreen() {
       {/* ── Hozir ── */}
       {isCurrent && <Hero now={now} info={info} statuses={statuses} warnMinutes={settings.warnMinutes} />}
 
-      {/* ── Kunning asosiy ishlari — kechqurun rejalangan maqsad ── */}
-      <TopTasks day={day} tasks={plan.tasks} />
-
       {/* ── Diqqat ── */}
       {update.ready && (
         <>
@@ -117,23 +105,22 @@ export default function TodayScreen() {
         </>
       )}
 
-      {isCurrent && <OverdueNotice day={day} />}
+      {toMove > 0 && (
+        <>
+          <Notice
+            title="Ishlar endi «Kun tartibim»da"
+            hint="Ilova ikkiga boʻlindi: bu yerda namoz va qazo. Eski ishlar va rejalarni bir bosishda koʻchiring."
+            action="Koʻchirish"
+            onPress={moveToPlanner}
+          />
+          <Spacer size={space.md} />
+        </>
+      )}
 
-      {/* ── Kun tartibi: namozlar va ularning ostida oʻsha blok ishlari ── */}
-      <SectionTitle
-        right={
-          <Tap onPress={() => router.push({ pathname: '/task', params: { day } })} hitSlop={10}>
-            <Txt variant="label" tone="accent">
-              + Ish qoʻshish
-            </Txt>
-          </Tap>
-        }>
-        Kun tartibi
-      </SectionTitle>
+      {/* ── Namozlar ── */}
+      <SectionTitle>Namozlar</SectionTitle>
       <Group>
         {PRAYERS.map((p, i) => {
-          const block = BLOCK_AFTER[p];
-          const items = block ? blockTasks(plan.tasks, block) : [];
           return (
             <View key={p}>
               {i > 0 && <Divider inset={space.lg} />}
@@ -155,16 +142,6 @@ export default function TodayScreen() {
                   </Txt>
                 </Row>
               )}
-              {items.map((t) => (
-                <TaskRow
-                  key={t.id}
-                  nested
-                  task={t}
-                  meta={taskMeta(t)}
-                  onToggle={() => setTaskDone(t.id, t.status !== 'done')}
-                  onLongPress={() => taskActions(t, day)}
-                />
-              ))}
             </View>
           );
         })}
@@ -179,20 +156,11 @@ export default function TodayScreen() {
             {qazoCount} ta qazo
           </Txt>
         )}
-        {plan.tasks.length > 0 && (
-          <Txt variant="caption" tone="muted" numeric>
-            ishlar {plan.tasks.filter((t) => t.status === 'done').length}/{plan.tasks.length}
-          </Txt>
-        )}
       </Row>
-
-      {/* ── Bloksiz ishlar va (qoʻshilgan boʻlsa) odatlar ── */}
-      <AnytimeSection day={day} tasks={plan.tasks} isCurrent={isCurrent} />
-      <HabitsSection day={day} habits={plan.habits} marks={plan.marks} />
 
       <Txt variant="caption" tone="faint" style={styles.footer}>
         Toʻraqoʻrgʻon · islom.uz usuli (15,5°, Hanafiy){'\n'}
-        Bosing — belgilanadi. Uzoq bosing — tahrirlash, ertaga oʻtkazish, voz kechish.
+        Namozni bosing — belgilash yoki tuzatish.
       </Txt>
     </ScreenScroll>
   );

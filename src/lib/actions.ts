@@ -14,7 +14,6 @@ import * as Notifications from 'expo-notifications';
 import { getSetting, setSetting } from '../db/client';
 import { emitChange } from './events';
 import { scheduleSnooze, syncSchedule } from './notifications';
-import { setTaskDone } from './plan';
 import { isPrayerId } from './prayers';
 import { readData } from './schedule';
 import { loadSettings } from './settings';
@@ -75,9 +74,6 @@ export async function handleResponse(
       break;
     case 'makeup_day':
       makeupDays(loadSettings().qazoDailyDays);
-      break;
-    case 'task_done':
-      if (data.taskId !== undefined) setTaskDone(data.taskId, true);
       break;
   }
 

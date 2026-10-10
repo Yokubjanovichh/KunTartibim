@@ -8,6 +8,7 @@ import { useNow } from '../../hooks/useNow';
 import { useSetupState } from '../../hooks/useSetup';
 import { checkUpdateNow, useUpdateState } from '../../hooks/useUpdate';
 import { countScheduled, nextScheduled, sendTest, syncSchedule } from '../../lib/notifications';
+import { plannerDataCount, plannerMovedAt } from '../../lib/planner-export';
 import { TIME_KEYS, TIME_LABEL, type TimeKey, TORAQORGON } from '../../lib/prayer-times';
 import { saveSettings } from '../../lib/settings';
 import { formatDayLong, formatHm, hhmm, isoDay, parseHm } from '../../lib/time';
@@ -17,6 +18,7 @@ import { type CompareRow, compareWithAladhan } from '../../lib/verify';
 import { space } from '../../theme/tokens';
 import { Divider, Group, ListRow, Row, ScreenScroll, SectionTitle, Stepper, Toggle, Txt } from '../../ui';
 import { AlarmSection } from '../../ui/AlarmSettings';
+import { moveToPlanner } from '../../ui/plannerMove';
 
 const signed = (v: number) => (v === 0 ? '0' : `${v > 0 ? '+' : '−'}${Math.abs(v)} daq`);
 
@@ -63,6 +65,8 @@ export default function SettingsScreen() {
   };
 
   const version = currentVersionInfo();
+  const toMove = plannerDataCount();
+  const movedAt = plannerMovedAt();
 
   return (
     <ScreenScroll>
@@ -180,25 +184,12 @@ export default function SettingsScreen() {
         />
         <Divider inset={space.lg} />
         <TimeRow
-          title="Kun yakuni"
-          hint="Kunni yopish va ertangi reja"
+          title="Uxlashdan oldin"
+          hint="Xufton yoki Vitr belgilanmagan boʻlsa eslatadi"
           value={settings.reviewTime}
           min={18 * 60}
           onChange={(v) => saveSettings({ reviewTime: v })}
         />
-        <Divider inset={space.lg} />
-        <ListRow
-          title="Yotish vaqti"
-          hint="Ertangi Bomdodgacha necha soat uyqu qolganini aytadi"
-          right={<Toggle value={settings.bedtimeEnabled} />}
-          onPress={() => saveSettings({ bedtimeEnabled: !settings.bedtimeEnabled })}
-        />
-        {settings.bedtimeEnabled && (
-          <>
-            <Divider inset={space.lg} />
-            <NightTimeRow title="Soat" hint="Yarim tundan keyin ham boʻladi — asta-sekin oldinga suring" value={settings.bedtime} onChange={(v) => saveSettings({ bedtime: v })} />
-          </>
-        )}
         <Divider inset={space.lg} />
         <ListRow
           title="Qazo eslatmasi"
@@ -235,11 +226,25 @@ export default function SettingsScreen() {
         />
       </Group>
 
-      {/* ── Reja ── */}
-      <SectionTitle>Reja</SectionTitle>
-      <Group>
-        <ListRow title="Odatlar" hint="Qoʻshish, tahrirlash, arxiv" right="›" onPress={() => router.push('/habits')} />
-      </Group>
+      {/* ── Kun tartibim: ishlar va rejalar boʻlingan ilovada ── */}
+      {toMove > 0 && (
+        <>
+          <SectionTitle>Kun tartibim</SectionTitle>
+          <Group>
+            <ListRow
+              title="«Kun tartibim»ga koʻchirish"
+              hint={
+                movedAt
+                  ? `Yuborilgan: ${formatDayLong(isoDay(movedAt))}, ${hhmm(movedAt)}. Qayta yuborilsa takrorlanmaydi.`
+                  : `${toMove} ta yozuv: ishlar, odatlar, kechki rejalar va xulosalar`
+              }
+              tone={movedAt ? 'default' : 'accent'}
+              right="›"
+              onPress={moveToPlanner}
+            />
+          </Group>
+        </>
+      )}
 
       {/* ── Ilova ── */}
       <SectionTitle>Ilova</SectionTitle>
@@ -295,22 +300,6 @@ function TimeRow({
       title={title}
       hint={hint}
       right={<Stepper value={minutes} min={min} max={23 * 60 + 45} step={15} onChange={(v) => onChange(formatHm(v))} format={formatHm} />}
-    />
-  );
-}
-
-/**
- * Kechki vaqt: 20:00 dan ertasi 02:00 gacha. Ichkarida yarim tundan keyingi vaqtlar
- * 24 soat qoʻshib saqlanadi, shunda stepper 23:45 → 00:00 → 00:15 tarzida uzluksiz yuradi.
- */
-function NightTimeRow({ title, hint, value, onChange }: { title: string; hint?: string; value: string; onChange: (v: string) => void }) {
-  const raw = parseHm(value) ?? 23 * 60;
-  const minutes = raw < 12 * 60 ? raw + 24 * 60 : raw;
-  return (
-    <ListRow
-      title={title}
-      hint={hint}
-      right={<Stepper value={minutes} min={20 * 60} max={26 * 60} step={15} onChange={(v) => onChange(formatHm(v))} format={formatHm} />}
     />
   );
 }

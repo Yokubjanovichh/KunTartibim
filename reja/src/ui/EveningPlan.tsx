@@ -7,7 +7,7 @@
  *   TodayClose    — bugungi odatlar (belgilanmaganlar uchun [✓]/[Yoʻq]) va ishlar ([Ertaga])
  *   TomorrowPlan  — ertangi ishlar, ★ asosiylar, "keyinroq" roʻyxati, uyqu hisobi,
  *                   [Reja tayyor ✓] va reja tuzish seriyasi
- *   WeekPlanStats — odatlar, bajarilgan ishlar, reja tuzilgan kunlar, erta turish
+ *   WeekPlanStats — odatlar, bajarilgan ishlar, reja tuzilgan kunlar
  * Hammasi bitta ekranda — qadam-baqadam sehrgar emas.
  */
 
@@ -17,7 +17,6 @@ import { useMemo, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 
 import { useDataVersion } from '../hooks/useData';
-import { alarmSupported, wakeLog, type WakeLogEntry } from '../lib/alarm';
 import { type Habit, habitMeta, isDaily, markKey, planningStreak, sleepHoursUntil, weekProgress } from '../lib/habits';
 import {
   addTask,
@@ -33,7 +32,7 @@ import {
   updateTask,
 } from '../lib/plan';
 import type { PrayerCalendar } from '../lib/prayer-times';
-import { addDays, daysBetween, formatDayLong, hhmm, isoDay, weekdayShort, weekStart } from '../lib/time';
+import { addDays, daysBetween, formatDayLong, hhmm, weekStart } from '../lib/time';
 import { color, hairline, radius, space, type } from '../theme/tokens';
 import { habitLongPress, taskActions, taskMeta } from './DayPlan';
 import { Button, Divider, Group, Progress, Row, SectionTitle, Spacer, Txt } from './index';
@@ -204,7 +203,7 @@ export function TomorrowPlan({
       {tasks.length > 0 && (
         <>
           <Txt variant="caption" tone="faint" style={styles.sub}>
-            ★ — asosiy ish (3 tagacha): ertalab Bomdod eslatmasida koʻrinadi
+            ★ — asosiy ish (3 tagacha): ertalabki «Bugungi reja» eslatmasida koʻrinadi
           </Txt>
           <Group>
             {tasks.map((t, i) => (
@@ -286,14 +285,11 @@ export function WeekPlanStats({
   today,
   habits,
   marks,
-  bomdod,
 }: {
   wStart: string;
   today: string;
   habits: Habit[];
   marks: ReadonlyMap<string, boolean>;
-  /** Rangestats'dan: Bomdod vaqtida oʻqilgan / hisobga kirgan — erta turish koʻrsatkichi */
-  bomdod: { prayed: number; qazo: number };
 }) {
   const version = useDataVersion();
   /* eslint-disable react-hooks/exhaustive-deps */
@@ -306,11 +302,10 @@ export function WeekPlanStats({
   const stuck = tasks
     .filter((t) => t.status === 'open' && t.movedCount >= 3)
     .sort((a, b) => b.movedCount - a.movedCount)[0];
-  const bomdodTracked = bomdod.prayed + bomdod.qazo;
 
   return (
     <>
-      <SectionTitle>Odatlar va reja</SectionTitle>
+      <SectionTitle>{habits.length ? 'Odatlar va reja' : 'Reja natijasi'}</SectionTitle>
       {habits.length > 0 && (
         <Group style={{ paddingVertical: space.sm }}>
           {habits.map((h) => {
@@ -338,15 +333,9 @@ export function WeekPlanStats({
       <View style={[styles.pad, { marginTop: space.md, gap: space.xs }]}>
         <Line label="Ishlar bajarildi" value={tasks.length ? `${done}/${tasks.length}` : '—'} />
         <Line label="Reja tuzilgan kunlar" value={`${planned.size}/${days}`} />
-        <Line label="Erta turish (Bomdod vaqtida)" value={bomdodTracked ? `${bomdod.prayed}/${bomdodTracked}` : '—'} />
         {stuck && (
           <Txt variant="caption" tone="muted" style={{ marginTop: space.sm }}>
             «{stuck.title}» {stuck.movedCount} marta koʻchirildi — kichikroq qadamlarga boʻling yoki voz keching.
-          </Txt>
-        )}
-        {bomdodTracked >= 3 && bomdod.prayed / bomdodTracked < 0.5 && (
-          <Txt variant="caption" tone="muted" style={{ marginTop: space.sm }}>
-            Bomdod — erta turishning oʻlchovi. Yotish vaqtini 30 daqiqaga oldinroq qilib koʻring (Sozlamalar → Yotish vaqti).
           </Txt>
         )}
       </View>
@@ -383,7 +372,6 @@ const styles = StyleSheet.create({
   },
   addInput: { ...type.body, flex: 1, color: color.text, paddingHorizontal: space.lg, paddingVertical: space.md + 2 },
   barRow: { paddingHorizontal: space.lg, paddingVertical: space.sm + 2 },
-  wakeRow: { paddingHorizontal: space.lg, paddingVertical: space.md, justifyContent: 'flex-start', gap: space.md },
   doneBox: {
     padding: space.lg,
     borderRadius: radius.lg,
@@ -392,65 +380,3 @@ const styles = StyleSheet.create({
     backgroundColor: color.accentFaint,
   },
 });
-
-/* ── Uygʻonish jurnali (Bomdod budilnigi) ─────────────────────────────────── */
-
-/**
- * Har tong budilnik qachon chalindi va qachon "Turdim" bosildi — native modul
- * jurnalidan. Kech yotish → kech turish bogʻliqligini koʻrish uchun.
- */
-export function WakeStats({ wStart, today }: { wStart: string; today: string }) {
-  if (!alarmSupported) return null;
-  // Native jurnal ilova tashqarisida (budilnik paytida) yoziladi — har chizishda yangidan oʻqiymiz
-  const week = wakeLog()
-    .filter((e) => {
-      const d = isoDay(new Date(e.at));
-      return d >= wStart && d <= addDays(today, 1);
-    })
-    .sort((a, b) => a.at - b.at);
-  if (!week.length) return null;
-
-  const awake = (e: WakeLogEntry) => e.dismissedAt > 0 && !e.asleep;
-  const woke = week.filter(awake);
-  const avgSnooze = week.reduce((s, e) => s + e.snoozes, 0) / week.length;
-
-  return (
-    <>
-      <SectionTitle right={<Txt variant="caption" tone="faint" numeric>{woke.length}/{week.length} turildi</Txt>}>
-        Uygʻonish
-      </SectionTitle>
-      <Group>
-        {week.map((e, i) => {
-          const day = isoDay(new Date(e.at));
-          const parts = [
-            !e.dismissedAt
-              ? 'javobsiz tugadi'
-              : e.asleep
-                ? `${hhmm(new Date(e.dismissedAt))} da turdi, lekin qayta uxlab qoldi`
-                : `${hhmm(new Date(e.dismissedAt))} da turdi`,
-            e.snoozes ? `${e.snoozes} marta keyinga surildi` : null,
-            e.rechecked && !e.asleep ? 'tekshiruvdan keyin qayta chaldi' : null,
-          ].filter(Boolean);
-          return (
-            <View key={`${e.at}`}>
-              {i > 0 && <Divider inset={space.lg} />}
-              <Row style={styles.wakeRow}>
-                <Txt variant="label" tone="muted" style={{ width: 64 }}>
-                  {weekdayShort(day)} {Number(day.slice(8))}
-                </Txt>
-                <Txt variant="body" tone={awake(e) ? 'default' : 'danger'} style={{ flex: 1 }} numeric>
-                  {parts.join(' · ')}
-                </Txt>
-              </Row>
-            </View>
-          );
-        })}
-      </Group>
-      {avgSnooze >= 1 && (
-        <Txt variant="caption" tone="muted" style={[styles.pad, { marginTop: space.sm }]}>
-          Har tong oʻrtacha {avgSnooze.toFixed(1).replace('.', ',')} marta keyinga surilyapti — telefonni karavotdan uzoqroqqa qoʻyib koʻring.
-        </Txt>
-      )}
-    </>
-  );
-}

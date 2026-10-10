@@ -5,7 +5,7 @@ import { Alert, StyleSheet, TextInput, View } from 'react-native';
 import { BLOCK_LABEL, BLOCKS, type BlockId, blockForTime, currentBlock } from '../lib/blocks';
 import { addTask, deleteTask, dropTask, getTask, MAX_PRIORITY, priorityCount, updateTask } from '../lib/plan';
 import { addDays, formatDayLong, formatHm, parseHm } from '../lib/time';
-import { calendarFor } from '../lib/tracker';
+import { calendarFor } from '../lib/calendar';
 import { color, hairline, radius, space, type } from '../theme/tokens';
 import { Button, Group, ListRow, Row, ScreenScroll, SectionTitle, Spacer, Tap, Toggle, Txt } from '../ui';
 import { Chip } from '../ui/plan';
