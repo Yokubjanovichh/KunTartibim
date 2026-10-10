@@ -53,6 +53,18 @@ root `.easignore` applies to this build too — never ignore `/reja` there.
   notes/plans `INSERT OR IGNORE`. Adjustments are always taken; reminder times only on the
   first import. Format must match Namozim's `src/lib/planner-export.ts`.
 
+## UI rules (user feedback 2026-10-10: "uzun nom bitta qatorda, qoʻshish tugmasi noqulay, klaviatura hisobga olinmagan")
+
+- Forms use `ui/form.tsx`: `FormScreen` (header + scroll with `keyboardShouldPersistTaps`
+  + a primary button pinned at the bottom — the window resizes with the keyboard, as in
+  MoliyamApp, so it sits right above it) and `TitleInput` (multiline, grows; Enter =
+  submit, never a newline). Never put the main action at the end of a long scroll.
+- The primary button says where the item goes ("Bugunga qoʻshish", "Ertaga qoʻshish").
+- Task rows: the circle toggles done, the title opens edit, long press = quick actions.
+  A tap anywhere must never silently complete a task.
+- Today screen: "+ Ish qoʻshish" floats bottom-right (thumb reach); prayer-time rows add
+  to their block. Batch entry (tomorrow's plan) keeps the keyboard open after each add.
+
 ## Next (phase 3)
 
 Week / month / year goals with OPTIONAL links to tasks (user requirement: unlinked tasks
