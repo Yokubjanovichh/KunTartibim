@@ -50,8 +50,14 @@
       "policy": "appVersion"
     },
     "extra": {
-      "router": {}
+      "router": {},
+      "eas": {
+        "projectId": "eaa8205e-1c54-4dfd-a191-72652eec97fe"
+      }
     },
-    "ios": {}
+    "ios": {},
+    "updates": {
+      "url": "https://u.expo.dev/eaa8205e-1c54-4dfd-a191-72652eec97fe"
+    }
   }
 }
