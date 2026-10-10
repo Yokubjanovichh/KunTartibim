@@ -94,7 +94,10 @@ export default function HabitsScreen() {
           onChangeText={(t) => setForm((f) => ({ ...f, title: t }))}
           placeholder="Masalan: Kitob oʻqish — 20 bet"
           placeholderTextColor={color.textFaint}
+          multiline
+          submitBehavior="submit"
           returnKeyType="done"
+          textAlignVertical="top"
           onSubmitEditing={save}
           style={styles.input}
           cursorColor={color.accent}
@@ -222,7 +225,7 @@ const styles = StyleSheet.create({
     borderColor: color.border,
     backgroundColor: color.surface,
   },
-  input: { ...type.bodyMedium, color: color.text, paddingHorizontal: space.lg, paddingVertical: space.lg },
+  input: { ...type.bodyMedium, color: color.text, paddingHorizontal: space.lg, paddingVertical: space.lg, maxHeight: 140 },
   formBody: { padding: space.lg, gap: space.md },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, paddingHorizontal: space.lg },
   chipsInline: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },

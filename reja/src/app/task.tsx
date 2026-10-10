@@ -1,13 +1,14 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Alert, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, StyleSheet, View } from 'react-native';
 
 import { BLOCK_LABEL, BLOCKS, type BlockId, blockForTime, currentBlock } from '../lib/blocks';
-import { addTask, deleteTask, dropTask, getTask, MAX_PRIORITY, priorityCount, updateTask } from '../lib/plan';
-import { addDays, formatDayLong, formatHm, parseHm } from '../lib/time';
 import { calendarFor } from '../lib/calendar';
-import { color, hairline, radius, space, type } from '../theme/tokens';
-import { Button, Group, ListRow, Row, ScreenScroll, SectionTitle, Spacer, Tap, Toggle, Txt } from '../ui';
+import { addTask, deleteTask, dropTask, getTask, MAX_PRIORITY, priorityCount, updateTask } from '../lib/plan';
+import { addDays, formatDayLong, formatDayShort, formatHm, parseHm } from '../lib/time';
+import { color, hairline, radius, space } from '../theme/tokens';
+import { Button, Group, ListRow, Row, SectionTitle, Spacer, Tap, Toggle, Txt } from '../ui';
+import { FormScreen, TitleInput } from '../ui/form';
 import { Chip } from '../ui/plan';
 
 /** Soatlar kun oqimi tartibida: Bomdoddan keyingi tongdan tungacha */
@@ -23,7 +24,8 @@ const REMIND: { label: string; value: number | null }[] = [
 
 /**
  * Ish qoʻshish / tahrirlash — bitta ekran. Yozing → (ixtiyoriy) kun, boʻlak yoki
- * aniq vaqt → Saqlash. `?id=` — tahrirlash; `?day=`, `?block=` — yangi ish uchun.
+ * aniq vaqt → pastdagi tugma yoki klaviaturadagi ✓. `?id=` — tahrirlash;
+ * `?day=`, `?block=` — yangi ish uchun (Bugun ekranidagi namoz vaqti qatoridan).
  */
 export default function TaskScreen() {
   const params = useLocalSearchParams<{ id?: string; day?: string; block?: string }>();
@@ -31,6 +33,7 @@ export default function TaskScreen() {
   const cal = calendarFor();
   const now = new Date();
   const today = cal.prayerDayAt(now);
+  const tomorrow = addDays(today, 1);
 
   const initialDay = editing ? editing.day : (params.day ?? today);
   const [title, setTitle] = useState(editing?.title ?? '');
@@ -38,7 +41,7 @@ export default function TaskScreen() {
   const [block, setBlock] = useState<BlockId | null>(() => {
     if (editing) return editing.block;
     if (params.block && (BLOCKS as readonly string[]).includes(params.block)) return params.block as BlockId;
-    // Bugungi yangi ish — hozirgi blokka (odatda "hozir qilaman" degani)
+    // Bugungi yangi ish — hozirgi boʻlakka (odatda "hozir qilaman" degani)
     return initialDay === today ? currentBlock(cal.times(today), now) : null;
   });
   const [time, setTime] = useState<string | null>(editing?.time ?? null);
@@ -47,7 +50,7 @@ export default function TaskScreen() {
 
   const dayOptions: { label: string; value: string | null }[] = [
     { label: 'Bugun', value: today },
-    { label: 'Ertaga', value: addDays(today, 1) },
+    { label: 'Ertaga', value: tomorrow },
     { label: 'Indinga', value: addDays(today, 2) },
     { label: 'Keyinroq', value: null },
   ];
@@ -60,6 +63,17 @@ export default function TaskScreen() {
 
   const priorityFull = !!day && !priority && priorityCount(day, editing?.id) >= MAX_PRIORITY;
   const canSave = title.trim().length > 0;
+
+  // Tugma qayerga tushishini aytadi — notoʻgʻri kunga qoʻshib yuborishning oldini oladi
+  const saveLabel = editing
+    ? 'Saqlash'
+    : day === null
+      ? 'Keyinroq roʻyxatiga qoʻshish'
+      : day === today
+        ? 'Bugunga qoʻshish'
+        : day === tomorrow
+          ? 'Ertaga qoʻshish'
+          : `${formatDayShort(day)} kuniga qoʻshish`;
 
   const enableTime = () => {
     // Bugun boʻlsa — keyingi butun soat, boshqa kun — 09:00
@@ -90,55 +104,45 @@ export default function TaskScreen() {
 
   const remove = () => {
     if (!editing) return;
-    Alert.alert('Bu ish nima boʻlsin?', editing.title, [
-      { text: 'Bekor', style: 'cancel' },
-      {
-        text: 'Voz kechdim',
-        onPress: () => {
-          dropTask(editing.id);
-          router.back();
+    Alert.alert(
+      'Bu ish nima boʻlsin?',
+      editing.title,
+      [
+        { text: 'Bekor', style: 'cancel' },
+        {
+          text: 'Voz kechdim',
+          onPress: () => {
+            dropTask(editing.id);
+            router.back();
+          },
         },
-      },
-      {
-        text: 'Oʻchirish',
-        style: 'destructive',
-        onPress: () => {
-          deleteTask(editing.id);
-          router.back();
+        {
+          text: 'Oʻchirish',
+          style: 'destructive',
+          onPress: () => {
+            deleteTask(editing.id);
+            router.back();
+          },
         },
-      },
-    ]);
+      ],
+      { cancelable: true },
+    );
   };
 
   return (
-    <ScreenScroll withTabBar={false}>
-      <Row style={styles.top}>
-        <Txt variant="overline" tone="faint">
-          {editing ? 'Ishni tahrirlash' : 'Yangi ish'}
-        </Txt>
-        <Tap onPress={() => router.back()} hitSlop={12}>
-          <Txt variant="title" tone="muted">
-            ✕
-          </Txt>
-        </Tap>
-      </Row>
+    <FormScreen
+      title={editing ? 'Ishni tahrirlash' : 'Yangi ish'}
+      onClose={() => router.back()}
+      footer={<Button title={saveLabel} kind="primary" disabled={!canSave} onPress={save} />}>
+      <TitleInput
+        value={title}
+        onChangeText={setTitle}
+        placeholder="Nima qilish kerak?"
+        autoFocus={!editing}
+        onSubmitEditing={save}
+      />
 
-      <View style={styles.inputBox}>
-        <TextInput
-          value={title}
-          onChangeText={setTitle}
-          placeholder="Nima qilish kerak?"
-          placeholderTextColor={color.textFaint}
-          autoFocus={!editing}
-          returnKeyType="done"
-          onSubmitEditing={save}
-          style={styles.input}
-          cursorColor={color.accent}
-          selectionColor={color.accentMuted}
-        />
-      </View>
-
-      <SectionTitle>Qachon</SectionTitle>
+      <SectionTitle>Kun</SectionTitle>
       <View style={styles.chips}>
         {dayOptions.map((o) => (
           <Chip key={o.label} label={o.label} selected={day === o.value} onPress={() => chooseDay(o.value)} />
@@ -166,10 +170,15 @@ export default function TaskScreen() {
             Aniq vaqt
           </SectionTitle>
           {time === null ? (
-            <View style={styles.chips}>
-              <Chip label="Vaqtsiz — namoz bloki yetarli" selected onPress={() => {}} />
-              <Chip label="Vaqt belgilash" selected={false} onPress={enableTime} />
-            </View>
+            <>
+              <View style={styles.chips}>
+                <Chip label="Vaqtsiz" selected onPress={() => setTime(null)} />
+                <Chip label="Vaqt belgilash" selected={false} onPress={enableTime} />
+              </View>
+              <Txt variant="caption" tone="faint" style={styles.hint}>
+                Vaqtsiz ish kun boʻlagi ostida turadi. Vaqt qoʻysangiz — eslatma ham keladi.
+              </Txt>
+            </>
           ) : (
             <View style={styles.timeBox}>
               <Row style={{ justifyContent: 'flex-start', alignItems: 'baseline', gap: space.md }}>
@@ -223,7 +232,7 @@ export default function TaskScreen() {
         </>
       )}
 
-      <Spacer size={space.lg} />
+      <Spacer size={space.xl} />
       <Group>
         <ListRow
           title="★ Asosiy ish"
@@ -232,7 +241,7 @@ export default function TaskScreen() {
               ? 'Sanasiz ish asosiy boʻla olmaydi — avval kunini tanlang'
               : priorityFull
                 ? `Bu kunda ${MAX_PRIORITY} ta asosiy ish bor — hammasi asosiy boʻlsa, hech biri asosiy emas`
-                : 'Kunning eng muhimi. Ertalab Bomdod eslatmasida koʻrinadi'
+                : 'Kunning eng muhimi — ertalabki «Bugungi reja» eslatmasida koʻrinadi'
           }
           right={<Toggle value={priority && day !== null} />}
           onPress={() => (priorityFull || day === null ? undefined : setPriority(!priority))}
@@ -240,27 +249,18 @@ export default function TaskScreen() {
         />
       </Group>
 
-      <Spacer size={space.xl} />
-      <View style={{ paddingHorizontal: space.lg, gap: space.sm }}>
-        <Button title={editing ? 'Saqlash' : 'Qoʻshish'} kind="primary" disabled={!canSave} onPress={save} />
-        {editing && <Button title="Voz kechish yoki oʻchirish" kind="danger" onPress={remove} />}
-      </View>
-    </ScreenScroll>
+      {editing && (
+        <View style={styles.danger}>
+          <Button title="Voz kechish yoki oʻchirish" kind="danger" onPress={remove} />
+        </View>
+      )}
+    </FormScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  top: { paddingHorizontal: space.xl, paddingTop: space.lg, paddingBottom: space.md },
-  inputBox: {
-    marginHorizontal: space.lg,
-    borderRadius: radius.lg,
-    borderWidth: hairline,
-    borderColor: color.border,
-    backgroundColor: color.surface,
-  },
-  input: { ...type.title, color: color.text, paddingHorizontal: space.lg, paddingVertical: space.lg },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, paddingHorizontal: space.lg },
-  hint: { paddingHorizontal: space.xl, paddingTop: space.sm },
+  hint: { paddingHorizontal: space.xl, paddingTop: space.sm, lineHeight: 17 },
   timeBox: {
     marginHorizontal: space.lg,
     padding: space.lg,
@@ -271,4 +271,5 @@ const styles = StyleSheet.create({
   },
   label: { marginTop: space.md, marginBottom: space.sm },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs + 2 },
+  danger: { paddingHorizontal: space.lg, paddingTop: space.xl },
 });

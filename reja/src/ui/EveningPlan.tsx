@@ -12,7 +12,6 @@
  */
 
 import * as Haptics from 'expo-haptics';
-import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 
@@ -34,11 +33,9 @@ import {
 import type { PrayerCalendar } from '../lib/prayer-times';
 import { addDays, daysBetween, formatDayLong, hhmm, weekStart } from '../lib/time';
 import { color, hairline, radius, space, type } from '../theme/tokens';
-import { habitLongPress, taskActions, taskMeta } from './DayPlan';
-import { Button, Divider, Group, Progress, Row, SectionTitle, Spacer, Txt } from './index';
+import { habitLongPress, openTask, taskActions, taskMeta } from './DayPlan';
+import { Button, Divider, Group, Progress, Row, SectionTitle, Spacer, Tap, Txt } from './index';
 import { HabitRow, MiniAction, TaskRow } from './plan';
-
-const editTask = (t: Task) => router.push({ pathname: '/task', params: { id: String(t.id) } });
 
 /* ── Bugunni yopish ───────────────────────────────────────────────────────── */
 
@@ -74,6 +71,7 @@ export function TodayClose({
                   task={t}
                   meta={taskMeta(t, { block: true })}
                   onToggle={() => setTaskDone(t.id, t.status !== 'done')}
+                  onPress={() => openTask(t)}
                   onLongPress={() => taskActions(t, today)}
                   right={t.status === 'open' ? <MiniAction label="Ertaga" onPress={() => moveTasks([t.id], tomorrow)} /> : undefined}
                 />
@@ -184,21 +182,33 @@ export function TomorrowPlan({
         {evening ? ` · hozir yotsangiz ${hours} soat uxlaysiz` : ''}
       </Txt>
 
+      {/* Ketma-ket yozish uchun: ✓ yoki «Qoʻshish» — ish qoʻshiladi, klaviatura yopilmaydi */}
       <View style={styles.addBox}>
         <TextInput
           value={draft}
           onChangeText={setDraft}
-          placeholder="Ertaga nima qilasiz? Yozib, «Qoʻshish»"
+          placeholder="Ertaga nima qilasiz?"
           placeholderTextColor={color.textFaint}
           onSubmitEditing={add}
+          multiline
           submitBehavior="submit"
           returnKeyType="done"
+          textAlignVertical="top"
           style={styles.addInput}
           cursorColor={color.accent}
           selectionColor={color.accentMuted}
         />
-        {draft.trim() ? <MiniAction label="Qoʻshish" tone="accent" onPress={add} /> : null}
+        <Tap onPress={add} disabled={!draft.trim()} scaleTo={0.94} hitSlop={6}>
+          <View style={styles.addButton}>
+            <Txt variant="label" style={{ color: color.bg }}>
+              Qoʻshish
+            </Txt>
+          </View>
+        </Tap>
       </View>
+      <Txt variant="caption" tone="faint" style={styles.addHint}>
+        Yozing va ✓ ni bosing — keyingisini yozavering. Vaqt yoki kun boʻlagi — ishni bosib.
+      </Txt>
 
       {tasks.length > 0 && (
         <>
@@ -212,7 +222,8 @@ export function TomorrowPlan({
                 <TaskRow
                   task={t}
                   meta={taskMeta(t, { block: true }) ?? 'Bosing — vaqt yoki kun boʻlagini belgilang'}
-                  onToggle={() => editTask(t)}
+                  onToggle={() => setTaskDone(t.id, t.status !== 'done')}
+                  onPress={() => openTask(t)}
                   onLongPress={() => taskActions(t, tomorrow)}
                   right={
                     <MiniAction
@@ -239,7 +250,8 @@ export function TomorrowPlan({
                 {i > 0 && <Divider inset={space.xxxl} />}
                 <TaskRow
                   task={t}
-                  onToggle={() => editTask(t)}
+                  onToggle={() => setTaskDone(t.id, t.status !== 'done')}
+                  onPress={() => openTask(t)}
                   onLongPress={() => taskActions(t, tomorrow)}
                   right={<MiniAction label="Ertaga" tone="default" onPress={() => moveTasks([t.id], tomorrow)} />}
                 />
@@ -361,16 +373,33 @@ const styles = StyleSheet.create({
   sub: { paddingHorizontal: space.xl, paddingTop: space.md, paddingBottom: space.sm },
   addBox: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     marginHorizontal: space.lg,
     marginTop: space.md,
-    paddingRight: space.sm,
+    padding: space.xs + 2,
     borderRadius: radius.lg,
     borderWidth: hairline,
-    borderColor: color.border,
+    borderColor: color.borderStrong,
     backgroundColor: color.surface,
   },
-  addInput: { ...type.body, flex: 1, color: color.text, paddingHorizontal: space.lg, paddingVertical: space.md + 2 },
+  addInput: {
+    ...type.body,
+    flex: 1,
+    color: color.text,
+    minHeight: 40,
+    maxHeight: 140,
+    paddingHorizontal: space.md,
+    paddingTop: space.sm + 1,
+    paddingBottom: space.sm + 1,
+  },
+  addButton: {
+    height: 40,
+    paddingHorizontal: space.lg,
+    borderRadius: radius.md,
+    backgroundColor: color.accent,
+    justifyContent: 'center',
+  },
+  addHint: { paddingHorizontal: space.xl, paddingTop: space.sm },
   barRow: { paddingHorizontal: space.lg, paddingVertical: space.sm + 2 },
   doneBox: {
     padding: space.lg,

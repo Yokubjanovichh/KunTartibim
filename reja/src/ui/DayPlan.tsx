@@ -57,6 +57,11 @@ export function blockTasks(tasks: Task[], block: BlockId): Task[] {
 
 /* ── Vazifa amallari ──────────────────────────────────────────────────────── */
 
+/** Ish nomini bosish — tahrirlash oynasi */
+export function openTask(task: Task) {
+  router.push({ pathname: '/task', params: { id: String(task.id) } });
+}
+
 /**
  * ⚠️ Android Alert koʻpi bilan 3 ta tugma koʻrsatadi (qolganini jimgina tashlaydi)
  * va sukut boʻyicha tashqariga bosib yopilmaydi — shuning uchun ≤3 tugma + cancelable.
@@ -100,6 +105,7 @@ export function TopTasks({ day, tasks, title = 'Bugungi asosiy' }: { day: string
               task={t}
               meta={taskMeta(t, { block: true })}
               onToggle={() => setTaskDone(t.id, t.status !== 'done')}
+              onPress={() => openTask(t)}
               onLongPress={() => taskActions(t, day)}
             />
           </View>
@@ -157,7 +163,13 @@ export function AnytimeSection({ day, tasks, tense }: { day: string; tasks: Task
         {items.map((t, i) => (
           <View key={t.id}>
             {i > 0 && <Divider inset={space.xxxl} />}
-            <TaskRow task={t} meta={taskMeta(t)} onToggle={() => setTaskDone(t.id, t.status !== 'done')} onLongPress={() => taskActions(t, day)} />
+            <TaskRow
+              task={t}
+              meta={taskMeta(t)}
+              onToggle={() => setTaskDone(t.id, t.status !== 'done')}
+              onPress={() => openTask(t)}
+              onLongPress={() => taskActions(t, day)}
+            />
           </View>
         ))}
       </Group>

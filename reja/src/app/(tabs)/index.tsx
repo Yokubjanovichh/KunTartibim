@@ -12,12 +12,13 @@ import { setTaskDone } from '../../lib/plan';
 import type { TimeKey } from '../../lib/prayer-times';
 import { addDays, formatDayLong, formatDuration, hhmm } from '../../lib/time';
 import { applyUpdate } from '../../lib/updates';
-import { space } from '../../theme/tokens';
+import { color, font, radius, space } from '../../theme/tokens';
 import { Divider, Group, Notice, Row, ScreenScroll, SectionTitle, Spacer, Tap, Txt } from '../../ui';
 import {
   AnytimeSection,
   blockTasks,
   HabitsSection,
+  openTask,
   OverdueNotice,
   taskActions,
   taskMeta,
@@ -68,6 +69,7 @@ export default function TodayScreen() {
   const endOf = (i: number) => (i + 1 < ANCHORS.length ? times[ANCHORS[i + 1].key] : nightEnd);
 
   return (
+    <View style={styles.root}>
     <ScreenScroll>
       {/* ── Sana ── */}
       <Row style={styles.dateRow}>
@@ -118,16 +120,7 @@ export default function TodayScreen() {
       {isCurrent && <OverdueNotice day={day} />}
 
       {/* ── Kun tartibi: namoz vaqtlari va ularning ostida oʻsha boʻlak ishlari ── */}
-      <SectionTitle
-        right={
-          <Tap onPress={() => router.push({ pathname: '/task', params: { day } })} hitSlop={10}>
-            <Txt variant="label" tone="accent">
-              + Ish qoʻshish
-            </Txt>
-          </Tap>
-        }>
-        Kun tartibi
-      </SectionTitle>
+      <SectionTitle>Kun tartibi</SectionTitle>
       <Group>
         {ANCHORS.map((a, i) => {
           const active = nowBlock === a.block;
@@ -172,6 +165,7 @@ export default function TodayScreen() {
                   task={t}
                   meta={taskMeta(t)}
                   onToggle={() => setTaskDone(t.id, t.status !== 'done')}
+                  onPress={() => openTask(t)}
                   onLongPress={() => taskActions(t, day)}
                 />
               ))}
@@ -192,14 +186,44 @@ export default function TodayScreen() {
 
       <Txt variant="caption" tone="faint" style={styles.footer}>
         Kun boʻlaklari Toʻraqoʻrgʻon namoz vaqtlari bilan birga siljiydi.{'\n'}
-        Ishni bosing — bajarildi. Uzoq bosing — tahrirlash, ertaga oʻtkazish, voz kechish. Namoz vaqtini bosing — oʻsha
-        boʻlakka ish qoʻshiladi.
+        Doirachani bosing — bajarildi. Ish nomini bosing — tahrirlash; uzoq bosing — ertaga oʻtkazish yoki voz kechish.
+        Namoz vaqtini bosing — oʻsha boʻlakka ish qoʻshiladi.
       </Txt>
     </ScreenScroll>
+
+      {/* Qoʻshish — bosh barmoq yetadigan joyda, skroll qayerda boʻlmasin koʻrinib turadi */}
+      <View style={styles.fabWrap} pointerEvents="box-none">
+        <Tap
+          onPress={() => router.push({ pathname: '/task', params: { day } })}
+          scaleTo={0.94}
+          accessibilityRole="button"
+          accessibilityLabel="Ish qoʻshish">
+          <View style={styles.fab}>
+            <Txt style={styles.fabPlus}>+</Txt>
+            <Txt variant="label" style={{ color: color.bg }}>
+              Ish qoʻshish
+            </Txt>
+          </View>
+        </Tap>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: color.bg },
+  fabWrap: { position: 'absolute', right: space.lg, bottom: space.lg },
+  fab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+    height: 52,
+    paddingLeft: space.lg,
+    paddingRight: space.xl,
+    borderRadius: radius.full,
+    backgroundColor: color.accent,
+  },
+  fabPlus: { fontFamily: font.medium, fontSize: 24, lineHeight: 28, color: color.bg },
   dateRow: { paddingHorizontal: space.lg, paddingTop: space.lg, paddingBottom: space.sm },
   arrow: { paddingHorizontal: space.md, fontSize: 28, lineHeight: 32 },
   anchorRow: { paddingHorizontal: space.lg, paddingVertical: space.md + 2, minHeight: 56 },

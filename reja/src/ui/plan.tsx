@@ -37,9 +37,15 @@ export function Check({ state, size = 22 }: { state: boolean | undefined; size?:
   );
 }
 
+/**
+ * Ish qatori. Ikki xil bosish — tasodifan "bajarildi" boʻlib qolmasin:
+ *   doiracha — bajarildi / qaytarish
+ *   nomi     — tahrirlash (uzoq bosish — tezkor amallar)
+ */
 export function TaskRow({
   task,
   onToggle,
+  onPress,
   onLongPress,
   meta,
   right,
@@ -47,43 +53,50 @@ export function TaskRow({
 }: {
   task: Task;
   onToggle: () => void;
+  onPress?: () => void;
   onLongPress?: () => void;
-  /** Sarlavha ostidagi izoh: blok nomi, "2 marta koʻchirildi" */
+  /** Sarlavha ostidagi izoh: boʻlak nomi, "2 marta koʻchirildi" */
   meta?: string;
   /** Oʻng tomondagi qoʻshimcha tugmalar (Tahlil ekranida) */
   right?: ReactNode;
-  /** Kun tartibida namoz ostida — ichkariroq */
+  /** Kun tartibida namoz vaqti ostida — ichkariroq */
   nested?: boolean;
 }) {
   const done = task.status === 'done';
   return (
-    <Tap onPress={onToggle} onLongPress={onLongPress} scaleTo={0.985} delayLongPress={350}>
-      <Row style={[styles.row, nested && styles.nested]}>
+    <Row style={[styles.row, nested && styles.nested]}>
+      <Tap
+        onPress={onToggle}
+        hitSlop={12}
+        scaleTo={0.85}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: done }}
+        accessibilityLabel={done ? 'Bajarilmagan deb qaytarish' : 'Bajarildi'}>
         <Check state={done ? true : undefined} />
-        <View style={{ flex: 1 }}>
-          <Row style={{ justifyContent: 'flex-start', gap: space.sm }}>
-            {task.priority === 1 && !done && (
-              <Txt variant="label" tone="accent">
-                ★
-              </Txt>
-            )}
-            <Txt
-              variant="body"
-              tone={done ? 'faint' : 'default'}
-              style={[{ flexShrink: 1 }, done && { textDecorationLine: 'line-through' }]}
-              numberOfLines={2}>
-              {task.title}
+      </Tap>
+      <Tap onPress={onPress} onLongPress={onLongPress} delayLongPress={350} scaleTo={0.985} haptic={!!onPress} style={styles.body}>
+        <Row style={{ justifyContent: 'flex-start', gap: space.sm }}>
+          {task.priority === 1 && !done && (
+            <Txt variant="label" tone="accent">
+              ★
             </Txt>
-          </Row>
-          {meta ? (
-            <Txt variant="caption" tone="faint" style={{ marginTop: 2 }}>
-              {meta}
-            </Txt>
-          ) : null}
-        </View>
-        {right}
-      </Row>
-    </Tap>
+          )}
+          <Txt
+            variant="body"
+            tone={done ? 'faint' : 'default'}
+            style={[{ flexShrink: 1 }, done && { textDecorationLine: 'line-through' }]}
+            numberOfLines={3}>
+            {task.title}
+          </Txt>
+        </Row>
+        {meta ? (
+          <Txt variant="caption" tone="faint" style={{ marginTop: 2 }}>
+            {meta}
+          </Txt>
+        ) : null}
+      </Tap>
+      {right}
+    </Row>
   );
 }
 
@@ -149,6 +162,7 @@ export function MiniAction({ label, onPress, tone = 'muted' }: { label: string; 
 const styles = StyleSheet.create({
   row: { paddingHorizontal: space.lg, paddingVertical: space.md, minHeight: 52, gap: space.md, justifyContent: 'flex-start' },
   nested: { paddingLeft: space.xxl, paddingVertical: space.sm + 2, minHeight: 44 },
+  body: { flex: 1, justifyContent: 'center', minHeight: 32 },
   check: {
     borderWidth: 1.5,
     borderColor: color.borderStrong,
