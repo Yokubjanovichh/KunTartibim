@@ -10,12 +10,17 @@ import { color, hairline, radius, space } from '../theme/tokens';
 import { Button, Row, ScreenScroll, Spacer, Tap, Txt } from '../ui';
 
 /**
- * Namozimdan koʻchirish — `kunreja://import?d=<JSON>` havolasi shu ekranni ochadi.
+ * Namozimdan koʻchirish — `kunreja://import?d=<base64url(JSON)>` havolasi shu ekranni ochadi.
  * Avval nima kelganini koʻrsatadi, foydalanuvchi tasdiqlagach yozadi.
  */
 export default function ImportScreen() {
   const params = useLocalSearchParams<{ d?: string | string[] }>();
   const raw = Array.isArray(params.d) ? params.d[0] : params.d;
+  // Oyna ochiq turganda yangi havola kelsa — natija va xato yangidan boshlanadi
+  return <ImportBody key={raw ?? ''} raw={raw} />;
+}
+
+function ImportBody({ raw }: { raw: string | undefined }) {
   const parsed = useMemo(() => parseTransfer(raw), [raw]);
   const settings = useSettings();
   const [result, setResult] = useState<TransferResult | null>(null);

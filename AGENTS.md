@@ -81,7 +81,7 @@ The same commands exist in `reja/` (run them from there). `metro.config.js` and
 - **Planning moved to `reja/` (2026-10-10).** The `tasks`, `habits`, `habit_log`,
   `day_plans`, `day_notes` tables still exist here (migrations are append-only) but the
   UI no longer reads them. `planner-export.ts` sends their rows to Kun tartibim via a
-  deep link `kunreja://import?d=<encodeURIComponent(JSON)>` (no file picking; the
+  deep link `kunreja://import?d=<base64url(JSON)>` (no file picking; the
   planner shows a summary, asks to confirm and dedupes repeats). The payload format must
   match `reja/src/lib/transfer.ts` — `tests/db.test.ts` pins the field names. The Today
   screen shows a one-time "Koʻchirish" notice; Settings keeps a re-send row.
@@ -139,6 +139,11 @@ The same commands exist in `reja/` (run them from there). `metro.config.js` and
 - Shell heredocs in this environment collapse a doubled backslash into a single one —
   write files that contain backslashes (regexes, JSX `{'\n'}`) with an editor tool,
   not `cat <<EOF` or inline Python.
+- **expo-router decodes deep-link query params three times** (`extractPathFromURL`:
+  URLSearchParams → `safeDecodeURIComponent` → re-parsed by `parseQueryParams`), so an
+  `encodeURIComponent`'d JSON loses `+` and breaks on `&`/`#`. Anything passed through a
+  link must be base64url (`src/lib/base64url.ts`, same file in `reja/`); the tests replay
+  the three passes (`routerDecode`).
 - **Foreground service contract** (`AlarmService`): a service started with
   `startForegroundService()` must call `startForeground()` — even `stopSelf()` before it
   crashes the app. So `startForeground` is the FIRST thing in `onStartCommand`, the session

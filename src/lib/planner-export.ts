@@ -4,13 +4,16 @@
  * Ilova ikkiga boʻlindi (2026-10-10): namoz va qazo — shu yerda (Namozim), kunlik
  * reja — «Kun tartibim»da (`reja/`). Eski ishlar, odatlar, kechki rejalar va
  * xulosalar shu bazada qolgan; ular havola ichida yuboriladi:
- * `kunreja://import?d=<JSON>` — fayl tanlash, ulashish kerak emas, bitta bosish.
+ * `kunreja://import?d=<base64url(JSON)>` — fayl tanlash, ulashish kerak emas, bitta bosish.
+ * base64url — chunki expo-router parametrni uch marta decode qiladi va oddiy
+ * encodeURIComponent'da `&` `#` `+` buzilardi (base64url.ts).
  * «Kun tartibim» qayta yuborilganini aniqlaydi va takrorlamaydi.
  *
  * ⚠️ Format `reja/src/lib/transfer.ts` (TransferPayload) bilan bir xil boʻlishi shart.
  */
 
 import { getDb, getSetting, setSetting } from '../db/client';
+import { encodeBase64Url } from './base64url';
 import { emitChange } from './events';
 
 export const PLANNER_SCHEME = 'kunreja';
@@ -106,7 +109,7 @@ export function plannerMovedAt(): Date | null {
 }
 
 export function plannerImportUrl(payload: PlannerPayload = buildPlannerPayload()): string {
-  return `${PLANNER_SCHEME}://import?d=${encodeURIComponent(JSON.stringify(payload))}`;
+  return `${PLANNER_SCHEME}://import?d=${encodeBase64Url(JSON.stringify(payload))}`;
 }
 
 /** Havola ochildi — Bugun ekranidagi eslatma endi koʻrinmaydi (Sozlamalarda qayta yuborish mumkin) */

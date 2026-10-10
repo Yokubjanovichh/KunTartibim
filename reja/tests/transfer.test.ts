@@ -5,11 +5,13 @@
 import assert from 'node:assert/strict';
 
 import { getDb, getSetting, setSetting } from '../src/db/client';
+import { decodeBase64Url, encodeBase64Url } from '../src/lib/base64url';
 import { markKey } from '../src/lib/habits';
 import { getDayNote, setDayNote } from '../src/lib/notes';
 import { habitMarks, listHabits, plannedDays, tasksForDay } from '../src/lib/plan';
 import { applyTransfer, parseTransfer, transferSummary } from '../src/lib/transfer';
 import { test } from './harness';
+import { routerDecode } from './routerDecode';
 
 function reset() {
   getDb().execSync(`
@@ -67,6 +69,27 @@ const sample = () => ({
     { day: 'week:2026-10-05', text: 'Hafta niyati', updatedAt: '2026-10-09T19:00:00.000Z' },
   ],
   settings: { adjustments: { bomdod: 0, quyosh: 0, peshin: 4, asr: 0, shom: 0, xufton: -4 }, reviewTime: '21:30', bedtimeEnabled: true, bedtime: '23:30' },
+});
+
+test('base64url: oʻzbekcha harflar, belgilar, emoji va yangi qator qaytib oʻqiladi', () => {
+  for (const text of ['', 'a', 'ab', 'abc', 'Toʻraqoʻrgʻon', 'C++ & Java #1 100% "?" =', 'Yangi\nqator 🙂', 'Ёлка ё']) {
+    const enc = encodeBase64Url(text);
+    assert.match(enc, /^[A-Za-z0-9_-]*$/);
+    assert.equal(decodeBase64Url(enc), text);
+  }
+  assert.throws(() => decodeBase64Url('bu+emas'));
+});
+
+test('Havola telefondagidek oʻqilganda ham (expo-router 3 marta decode qiladi) maʼlumot buzilmaydi', () => {
+  const data = sample();
+  data.tasks[0].title = 'C++ & Java #1 — 100% "tayyor"';
+  const url = `kunreja://import?d=${encodeBase64Url(JSON.stringify(data))}`;
+  const r = parseTransfer(routerDecode(url));
+  assert.ok(r.ok, r.ok ? '' : r.error);
+  if (r.ok) assert.equal(r.payload.tasks[0].title, 'C++ & Java #1 — 100% "tayyor"');
+  // Eski usul (encodeURIComponent) aynan shu yerda buzilardi
+  const old = parseTransfer(routerDecode(`kunreja://import?d=${encodeURIComponent(JSON.stringify(data))}`));
+  assert.equal(old.ok, false);
 });
 
 test('Koʻchirish: buzuq yoki notanish maʼlumot rad etiladi', () => {

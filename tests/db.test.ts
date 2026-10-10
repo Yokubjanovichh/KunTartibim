@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 
 import { getDb, getSetting, setSetting } from '../src/db/client';
 import { SCHEMA_VERSION } from '../src/db/migrations';
+import { decodeBase64Url } from '../src/lib/base64url';
 import { buildPlannerPayload, markPlannerMoved, plannerDataCount, plannerImportUrl, plannerMovedAt } from '../src/lib/planner-export';
 import {
   addOldQazo,
@@ -19,6 +20,7 @@ import {
   reconcile,
 } from '../src/lib/tracker';
 import { test } from './harness';
+import { routerDecode } from './routerDecode';
 
 function reset() {
   getDb().execSync(`
@@ -126,13 +128,15 @@ test('Koʻchirish: ishlar, odatlar, belgilar, rejalar, xulosalar va sozlamalar �
   assert.equal(p.settings.reviewTime, undefined, 'oʻzgartirilmagan sozlama yuborilmaydi');
 });
 
-test('Koʻchirish havolasi: kunreja://import, maʼlumot toʻliq qaytib oʻqiladi (oʻzbekcha harflar ham)', () => {
+test('Koʻchirish havolasi: telefondagidek (expo-router 3 marta decode) oʻqilganda ham buzilmaydi', () => {
   reset();
   seedPlanning();
+  getDb().runSync(`INSERT INTO tasks (title, day, created_at) VALUES ('C++ & Java #1 — 100% "+"', '2026-10-11', '2026-10-10T08:00:00.000Z');`);
   const url = plannerImportUrl();
-  assert.ok(url.startsWith('kunreja://import?d='));
-  const back = JSON.parse(decodeURIComponent(url.slice('kunreja://import?d='.length)));
+  assert.match(url, /^kunreja:\/\/import\?d=[A-Za-z0-9_-]+$/);
+  const back = JSON.parse(decodeBase64Url(routerDecode(url)!));
   assert.equal(back.habits[0].title, 'Kitob oʻqish');
+  assert.equal(back.tasks[2].title, 'C++ & Java #1 — 100% "+"');
   assert.ok(url.length < 100_000, `${url.length} belgi`);
 });
 

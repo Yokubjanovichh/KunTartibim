@@ -47,7 +47,8 @@ root `.easignore` applies to this build too — never ignore `/reja` there.
 - Headless notification task `kunreja-notification-action` (`background.ts`, imported in
   `index.ts` before expo-router). Payloads via `readData(content)` — never `content.data`.
 - **Import from Namozim** (`transfer.ts`, route `app/import.tsx`): Namozim opens
-  `kunreja://import?d=<JSON>`; we validate/sanitize, show a summary, write in one
+  `kunreja://import?d=<base64url(JSON)>` (raw JSON starting with `{` is also accepted);
+  we validate/sanitize, show a summary, write in one
   transaction. Dedupe: tasks and habits by (title, created_at), habit ids remapped,
   notes/plans `INSERT OR IGNORE`. Adjustments are always taken; reminder times only on the
   first import. Format must match Namozim's `src/lib/planner-export.ts`.

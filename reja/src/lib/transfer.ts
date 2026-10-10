@@ -2,7 +2,7 @@
  * Namozimdan koʻchirish — ikki ilova boʻlinganda eski ishlar, odatlar, rejalar
  * va xulosalar shu yerga oʻtadi.
  *
- * Namozim maʼlumotni havola ichida yuboradi: `kunreja://import?d=<JSON>` —
+ * Namozim maʼlumotni havola ichida yuboradi: `kunreja://import?d=<base64url(JSON)>` —
  * fayl tanlash, ulashish kerak emas, bitta bosish. Bu yerda u tekshiriladi va
  * bitta tranzaksiyada yoziladi. Qayta koʻchirilsa takrorlanmaydi: ish va odat
  * (nomi + yaratilgan vaqti) boʻyicha, qolganlari kalit boʻyicha aniqlanadi.
@@ -11,6 +11,7 @@
  */
 
 import { getDb, getSetting, setSetting } from '../db/client';
+import { decodeBase64Url } from './base64url';
 import { isBlockId } from './blocks';
 import { emitChange } from './events';
 import { TIME_KEYS } from './prayer-times';
@@ -79,7 +80,9 @@ export function parseTransfer(raw: string | undefined | null): ParseResult {
   if (!raw) return { ok: false, error: 'Havolada maʼlumot yoʻq' };
   let data: Record<string, unknown>;
   try {
-    data = JSON.parse(raw) as Record<string, unknown>;
+    // base64url (Namozim 1.2.0+); "{" bilan boshlansa — xom JSON (sinov, eski shakl)
+    const text = raw.trimStart().startsWith('{') ? raw : decodeBase64Url(raw.trim());
+    data = JSON.parse(text) as Record<string, unknown>;
   } catch {
     return { ok: false, error: 'Maʼlumot buzilgan (JSON oʻqilmadi)' };
   }
